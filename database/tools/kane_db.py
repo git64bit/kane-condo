@@ -22,6 +22,12 @@ SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 DATETIME_PATTERN = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$")
 
 REQUIRED_TABLES = {
+    "county",
+    "source_agency",
+    "dataset",
+    "harvest_run",
+    "source_file",
+    "source_release",
     "schema_migration",
     "gpkg_spatial_ref_sys",
     "gpkg_contents",
