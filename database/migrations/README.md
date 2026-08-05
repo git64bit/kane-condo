@@ -17,6 +17,7 @@ Current migrations:
 0004_roads_water_storage.sql
 0005_official_building_storage.sql
 0006_project_building_identity.sql
+0007_classification_history.sql
 ```
 
 Rules:
@@ -43,5 +44,7 @@ Rules:
 `0005_official_building_storage.sql` registers immutable Polygon and MultiPolygon official building footprints in EPSG:4326, preserving declared source identity, source order, release lineage, hashes, attributes, and bounds.
 
 `0006_project_building_identity.sql` adds project-owned building identities and many-to-many official-footprint mappings while enforcing deterministic one-to-one initial origins.
+
+`0007_classification_history.sql` adds explicit current building classifications, append-only classification events, idempotent event keys, correction chains, and undo relationships. Missing current rows mean Unclassified.
 
 Migration files are part of the database identity. Changing an accepted migration causes validation to fail rather than silently rewriting history.

@@ -98,6 +98,25 @@ Use:
 bash database/kane-project-buildings.sh --help
 ```
 
+## Building-classification command
+
+`kane_classifications.py` supports:
+
+```text
+set       Write one deliberate classification event
+undo      Reverse the latest event with a new append-only event
+get       Report one current building classification
+history   Report one building's ordered event history
+info      Report county-wide classification and event counts
+validate  Validate current state, event chains, triggers, and registrations
+```
+
+Use:
+
+```bash
+bash database/kane-classifications.sh --help
+```
+
 `kane_geometry.py` provides strict EPSG:4326 line and polygon normalization and GeoPackage binary encoding/decoding for county boundary, roads, water, official buildings, and later spatial migrations.
 
 All commands use Python's standard library. They run on server-side Linux infrastructure, keep production data outside Git, and do not move processing onto Windows or Ubuntu user workstations.

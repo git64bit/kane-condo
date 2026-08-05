@@ -115,7 +115,7 @@ class GeoPackageCoreTests(unittest.TestCase):
         self.assertEqual("1.4.0", info["geopackage_version"])
         self.assertEqual(kane_db.GPKG_APPLICATION_ID, info["application_id"])
         self.assertEqual(kane_db.GPKG_USER_VERSION, info["user_version"])
-        self.assertEqual(6, len(info["migrations"]))
+        self.assertEqual(7, len(info["migrations"]))
         self.assertEqual(MIGRATION_PATH.name, info["migrations"][0]["filename"])
 
     def test_refuses_non_geopackage_extension(self) -> None:

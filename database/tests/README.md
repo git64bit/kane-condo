@@ -21,3 +21,5 @@ Batch 011 tests immutable road and water GeoPackage registration, line and polyg
 Batch 012 tests immutable official building-release storage, Polygon and MultiPolygon geometry, holes, declared source identity, exact source evidence, source order, hashes, bounds, tamper detection, and public building commands.
 
 Batch 013 tests deterministic project-owned building identities, one-to-one initial mappings, source-release independence, future split/merge mapping capacity, tamper detection, coverage validation, and public identity commands.
+
+Batch 014 tests default Unclassified state, explicit current classifications, append-only history, correction, undo, idempotent event keys, stale-state rejection, and classification commands.

@@ -35,4 +35,4 @@ The command uses Python's standard library only. It validates the repository ske
 
 ## Development boundary
 
-Batches 008–013 establish the GeoPackage 1.4.0 core, immutable migration identity, administrative source provenance, county boundary, roads, water, official building releases, and project-owned building identities with auditable source mappings. The production seed import, classifications, private API, browser application, and offline render package remain outside the repository at this stage.
+Batches 008–014 establish the GeoPackage 1.4.0 core, immutable migration identity, administrative source provenance, county boundary, roads, water, official building releases, project-owned building identities, and authoritative building classifications with append-only history. The production seed import, private API, browser application, and offline render package remain outside the repository at this stage.

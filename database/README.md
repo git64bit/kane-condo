@@ -36,6 +36,7 @@ The current migrations establish:
 - immutable roads and water features grouped by source release;
 - immutable official building footprints grouped by source release;
 - project-owned building identities and auditable official-footprint mappings;
+- authoritative current building classifications and append-only history;
 - exact source-file, source-order, geometry, attributes, content, and bounds identities.
 
 Create a temporary database outside the repository:
@@ -83,6 +84,16 @@ Create deterministic project-owned identities from the accepted official buildin
 bash database/kane-project-buildings.sh seed /tmp/kane-condo.gpkg BUILDING_RELEASE
 bash database/kane-project-buildings.sh validate /tmp/kane-condo.gpkg
 bash database/kane-project-buildings.sh info /tmp/kane-condo.gpkg BUILDING_RELEASE
+```
+
+Write and inspect authoritative building classifications after project identities exist:
+
+```bash
+bash database/kane-classifications.sh set /tmp/kane-condo.gpkg BUILDING_KEY other request:001
+bash database/kane-classifications.sh get /tmp/kane-condo.gpkg BUILDING_KEY
+bash database/kane-classifications.sh history /tmp/kane-condo.gpkg BUILDING_KEY
+bash database/kane-classifications.sh undo /tmp/kane-condo.gpkg BUILDING_KEY request:002
+bash database/kane-classifications.sh validate /tmp/kane-condo.gpkg
 ```
 
 The commands refuse unsafe or inconsistent input and validate writes before completion. The actual accepted donor boundary remains external until the later verified seed-import batch.

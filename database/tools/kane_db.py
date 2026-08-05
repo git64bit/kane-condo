@@ -33,6 +33,8 @@ REQUIRED_TABLES = {
     "source_building",
     "project_building",
     "project_building_source_mapping",
+    "building_classification_event",
+    "building_classification_current",
     "schema_migration",
     "gpkg_spatial_ref_sys",
     "gpkg_contents",
@@ -136,6 +138,22 @@ CORE_COLUMNS = {
         ("mapping_status", "TEXT", 1, 0),
         ("created_at", "DATETIME", 1, 0),
         ("reviewed_at", "DATETIME", 0, 0),
+    ),
+    "building_classification_event": (
+        ("classification_event_id", "INTEGER", 0, 1),
+        ("event_key", "TEXT", 1, 0),
+        ("project_building_id", "INTEGER", 1, 0),
+        ("predecessor_event_id", "INTEGER", 0, 0),
+        ("event_kind", "TEXT", 1, 0),
+        ("previous_classification", "TEXT", 1, 0),
+        ("new_classification", "TEXT", 1, 0),
+        ("reverses_event_id", "INTEGER", 0, 0),
+        ("created_at", "DATETIME", 1, 0),
+    ),
+    "building_classification_current": (
+        ("project_building_id", "INTEGER", 0, 1),
+        ("classification", "TEXT", 1, 0),
+        ("classification_event_id", "INTEGER", 1, 0),
     ),
     "source_map_feature": (
         ("source_map_feature_id", "INTEGER", 0, 1),
@@ -448,6 +466,8 @@ def validate_core_schema(connection: sqlite3.Connection) -> list[str]:
         for table, identifier in (
             ("project_building", "Kane Condo project buildings"),
             ("project_building_source_mapping", "Kane Condo building mappings"),
+            ("building_classification_event", "Kane Condo classification history"),
+            ("building_classification_current", "Kane Condo current classifications"),
         ):
             project_content = connection.execute(
                 "SELECT data_type, identifier, srs_id, last_change FROM gpkg_contents "
