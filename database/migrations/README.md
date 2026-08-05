@@ -8,11 +8,12 @@ Kane Condo migrations are ordered, immutable SQL files.
 NNNN_lowercase_description.sql
 ```
 
-Examples:
+Current migrations:
 
 ```text
 0001_geopackage_core.sql
 0002_administrative_provenance.sql
+0003_county_boundary.sql
 ```
 
 Rules:
@@ -26,8 +27,12 @@ Rules:
 - design each migration for an explicit transaction boundary;
 - add no County Field Map classification, grid, cell, or review schema.
 
-## Current migration
+## Current schema boundary
 
-`0001_geopackage_core.sql` creates the GeoPackage 1.4.0 metadata foundation and registers the immutable `schema_migration` ledger as a non-spatial attributes table.
+`0001_geopackage_core.sql` creates the GeoPackage 1.4.0 metadata foundation and immutable migration ledger.
 
-The migration file is part of the database identity. Changing an accepted migration causes validation to fail rather than silently rewriting history.
+`0002_administrative_provenance.sql` records counties, official agencies, datasets, harvest runs, preserved source files, and source-release lineage.
+
+`0003_county_boundary.sql` registers immutable Polygon or MultiPolygon county-boundary features in EPSG:4326 and associates each feature with one official source release and one preserved source file.
+
+Migration files are part of the database identity. Changing an accepted migration causes validation to fail rather than silently rewriting history.

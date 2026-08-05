@@ -23,13 +23,22 @@ REQUIRED_FILES = (
     Path("database/README.md"),
     Path("database/run-tests.sh"),
     Path("database/kane-db.sh"),
+    Path("database/kane-provenance.sh"),
+    Path("database/kane-boundary.sh"),
     Path("database/migrations/README.md"),
     Path("database/tools/README.md"),
     Path("database/tests/README.md"),
     Path("database/tests/test_repository_skeleton.py"),
     Path("database/tests/test_geopackage_core.py"),
+    Path("database/tests/test_administrative_provenance.py"),
+    Path("database/tests/test_county_boundary.py"),
     Path("database/migrations/0001_geopackage_core.sql"),
+    Path("database/migrations/0002_administrative_provenance.sql"),
+    Path("database/migrations/0003_county_boundary.sql"),
     Path("database/tools/kane_db.py"),
+    Path("database/tools/kane_provenance.py"),
+    Path("database/tools/kane_geometry.py"),
+    Path("database/tools/kane_boundary.py"),
     Path("tools/verify_repository.py"),
 )
 
@@ -124,6 +133,8 @@ def verify_shell_entry_points(root: Path) -> int:
         root / "verify-linux.sh",
         root / "database/run-tests.sh",
         root / "database/kane-db.sh",
+        root / "database/kane-provenance.sh",
+        root / "database/kane-boundary.sh",
     )
     for script in scripts:
         text = script.read_text(encoding="utf-8")

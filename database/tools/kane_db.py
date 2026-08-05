@@ -28,6 +28,7 @@ REQUIRED_TABLES = {
     "harvest_run",
     "source_file",
     "source_release",
+    "source_county_boundary",
     "schema_migration",
     "gpkg_spatial_ref_sys",
     "gpkg_contents",
@@ -76,6 +77,24 @@ CORE_COLUMNS = {
         ("extension_name", "TEXT", 1, 0),
         ("definition", "TEXT", 1, 0),
         ("scope", "TEXT", 1, 0),
+    ),
+    "source_county_boundary": (
+        ("source_boundary_id", "INTEGER", 0, 1),
+        ("source_release_id", "INTEGER", 1, 0),
+        ("source_file_id", "INTEGER", 1, 0),
+        ("source_feature_id", "TEXT", 1, 0),
+        ("source_ordinal", "INTEGER", 1, 0),
+        ("geometry", "BLOB", 1, 0),
+        ("geometry_type", "TEXT", 1, 0),
+        ("geometry_sha256", "TEXT", 1, 0),
+        ("attributes_json", "TEXT", 1, 0),
+        ("attributes_sha256", "TEXT", 1, 0),
+        ("content_sha256", "TEXT", 1, 0),
+        ("min_x", "DOUBLE", 1, 0),
+        ("min_y", "DOUBLE", 1, 0),
+        ("max_x", "DOUBLE", 1, 0),
+        ("max_y", "DOUBLE", 1, 0),
+        ("created_at", "DATETIME", 1, 0),
     ),
 }
 
@@ -310,6 +329,24 @@ def validate_core_schema(connection: sqlite3.Connection) -> list[str]:
                 errors.append("schema_migration must not declare spatial bounds or an SRS")
             if not valid_datetime(content[7]):
                 errors.append("schema_migration gpkg_contents last_change is invalid")
+
+        boundary_content = connection.execute(
+            "SELECT data_type, identifier, srs_id, last_change FROM gpkg_contents "
+            "WHERE table_name = 'source_county_boundary'"
+        ).fetchone()
+        if boundary_content is None:
+            errors.append("source_county_boundary is not registered in gpkg_contents")
+        elif boundary_content[:3] != ("features", "Kane County boundary", 4326):
+            errors.append("source_county_boundary has an invalid gpkg_contents registration")
+        elif not valid_datetime(boundary_content[3]):
+            errors.append("source_county_boundary gpkg_contents last_change is invalid")
+
+        boundary_geometry = connection.execute(
+            "SELECT column_name, geometry_type_name, srs_id, z, m "
+            "FROM gpkg_geometry_columns WHERE table_name = 'source_county_boundary'"
+        ).fetchone()
+        if boundary_geometry != ("geometry", "GEOMETRY", 4326, 0, 0):
+            errors.append("source_county_boundary has an invalid geometry registration")
 
     except sqlite3.Error as exc:
         errors.append(f"GeoPackage core data validation failed: {exc}")

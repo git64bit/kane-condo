@@ -1,6 +1,6 @@
 # Kane Condo Database Workspace
 
-This directory contains the authoritative SQLite/GeoPackage migration workspace, controlled database command, and database-focused tests.
+This directory contains the authoritative SQLite/GeoPackage migration workspace, controlled server-side commands, and database-focused tests.
 
 ## Boundaries
 
@@ -13,26 +13,26 @@ This directory contains the authoritative SQLite/GeoPackage migration workspace,
 ## Layout
 
 ```text
-migrations/  Ordered immutable SQL migrations
-tools/       Controlled server-side database command implementations
-tests/       Standard-library database tests
-kane-db.sh   Database command entry point
-run-tests.sh Repeatable database test entry point
+migrations/          Ordered immutable SQL migrations
+tools/               Controlled server-side database commands and geometry support
+tests/               Standard-library database tests
+kane-db.sh           GeoPackage command entry point
+kane-provenance.sh   Administrative provenance entry point
+kane-boundary.sh     County-boundary storage entry point
+run-tests.sh         Repeatable database test entry point
 ```
 
-## GeoPackage foundation
+## Current database foundation
 
-Batch 008 establishes a GeoPackage 1.4.0 foundation with:
+The current migrations establish:
 
-- SQLite `application_id` `0x47504B47` (`GPKG`);
-- SQLite `user_version` `10400`;
-- required spatial-reference and contents metadata;
-- feature geometry-column metadata for later migrations;
-- the standard extension registry;
-- an immutable `schema_migration` attributes table;
-- SHA-256 verification of every applied migration.
+- GeoPackage 1.4.0 metadata and EPSG:4326;
+- exact SHA-256 migration identity;
+- Kane County, source-agency, dataset, harvest, source-file, and source-release provenance;
+- immutable county-boundary features grouped by source release;
+- exact source-file, geometry, attributes, content, and bounds identities.
 
-Create a temporary foundation outside the repository:
+Create a temporary database outside the repository:
 
 ```bash
 bash database/kane-db.sh init /tmp/kane-condo.gpkg
@@ -40,7 +40,16 @@ bash database/kane-db.sh validate /tmp/kane-condo.gpkg
 bash database/kane-db.sh info /tmp/kane-condo.gpkg
 ```
 
-The command refuses to overwrite an existing file and removes a newly created file if migration or validation fails.
+Record a synthetic or controlled release descriptor before importing its boundary geometry:
+
+```bash
+bash database/kane-provenance.sh record /tmp/kane-condo.gpkg /path/to/release.json
+bash database/kane-boundary.sh import /tmp/kane-condo.gpkg RELEASE_KEY /path/to/boundary.geojson
+bash database/kane-boundary.sh validate /tmp/kane-condo.gpkg
+bash database/kane-boundary.sh info /tmp/kane-condo.gpkg
+```
+
+The commands refuse unsafe or inconsistent input and validate writes before completion. The actual accepted donor boundary remains external until the later verified seed-import batch.
 
 ## Test entry point
 
@@ -49,5 +58,3 @@ From the repository root:
 ```bash
 bash database/run-tests.sh
 ```
-
-Administrative provenance begins in Batch 009.

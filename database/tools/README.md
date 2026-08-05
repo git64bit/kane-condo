@@ -2,22 +2,54 @@
 
 This directory contains controlled server-side commands for Kane Condo database work.
 
-## Current command
+## GeoPackage command
 
 `kane_db.py` supports:
 
 ```text
 init      Create a new GeoPackage and apply every migration
-validate  Validate the GeoPackage header, core schema, integrity, and migration identity
+validate  Validate the GeoPackage header, schema, integrity, and migration identity
 info      Report the database and migration identity as JSON
 ```
 
-Use the repository entry point:
+Use:
 
 ```bash
 bash database/kane-db.sh --help
 ```
 
-The implementation uses Python's standard library and opens validated databases read-only. It never places production data in Git and never moves processing onto Windows or Ubuntu user workstations.
+## Administrative provenance command
 
-Later approved batches extend this command with administrative provenance, seed import, refresh, reconciliation, promotion, and package-generation functions.
+`kane_provenance.py` supports:
+
+```text
+record    Record one source-release descriptor and preserved source-file identities
+trace     Trace one release through its dataset, agency, county, harvest, and files
+validate  Validate administrative provenance
+```
+
+Use:
+
+```bash
+bash database/kane-provenance.sh --help
+```
+
+## County-boundary command
+
+`kane_boundary.py` supports:
+
+```text
+import    Store one Polygon or MultiPolygon GeoJSON feature for an existing boundary release
+info      Report the accepted or named stored boundary and its source lineage
+validate  Validate boundary registration, geometry, bounds, hashes, and release association
+```
+
+Use:
+
+```bash
+bash database/kane-boundary.sh --help
+```
+
+`kane_geometry.py` provides strict EPSG:4326 polygon normalization and GeoPackage binary encoding/decoding for the boundary command and later spatial migrations.
+
+All commands use Python's standard library. They run on server-side Linux infrastructure, keep production data outside Git, and do not move processing onto Windows or Ubuntu user workstations.
