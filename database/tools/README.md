@@ -1,17 +1,23 @@
 # Database Tools
 
-This directory will contain the controlled server-side commands for:
+This directory contains controlled server-side commands for Kane Condo database work.
 
-- creating and migrating Kane Condo databases;
-- validating database structure and integrity;
-- importing approved seed data;
-- checking and harvesting official sources;
-- building and validating candidates;
-- comparing releases;
-- reconciling project building identities;
-- promoting and rolling back accepted databases;
-- generating offline render packages.
+## Current command
 
-Tools must use explicit inputs and external data roots. They must not place production data in Git or move development and processing onto Windows or Ubuntu user workstations.
+`kane_db.py` supports:
 
-Batch 007 contains no database implementation.
+```text
+init      Create a new GeoPackage and apply every migration
+validate  Validate the GeoPackage header, core schema, integrity, and migration identity
+info      Report the database and migration identity as JSON
+```
+
+Use the repository entry point:
+
+```bash
+bash database/kane-db.sh --help
+```
+
+The implementation uses Python's standard library and opens validated databases read-only. It never places production data in Git and never moves processing onto Windows or Ubuntu user workstations.
+
+Later approved batches extend this command with administrative provenance, seed import, refresh, reconciliation, promotion, and package-generation functions.

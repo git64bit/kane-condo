@@ -35,4 +35,4 @@ The command uses Python's standard library only. It validates the repository ske
 
 ## Development boundary
 
-The browser application, private API, authoritative database schema, county data, and offline render package are not introduced by the repository-skeleton batch. Their implementation begins only in their approved milestones.
+Batch 008 adds the GeoPackage 1.4.0 core, an immutable migration ledger, and a bounded database command. Administrative provenance, county data, the private API, browser application, and offline render package remain outside the repository at this stage.

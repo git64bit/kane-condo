@@ -26,4 +26,8 @@ Rules:
 - design each migration for an explicit transaction boundary;
 - add no County Field Map classification, grid, cell, or review schema.
 
-Batch 007 contains no SQL migration. Batch 008 introduces the GeoPackage core and migration ledger.
+## Current migration
+
+`0001_geopackage_core.sql` creates the GeoPackage 1.4.0 metadata foundation and registers the immutable `schema_migration` ledger as a non-spatial attributes table.
+
+The migration file is part of the database identity. Changing an accepted migration causes validation to fail rather than silently rewriting history.

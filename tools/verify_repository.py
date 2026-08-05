@@ -22,10 +22,14 @@ REQUIRED_FILES = (
     Path("docs/V1_SCOPE.md"),
     Path("database/README.md"),
     Path("database/run-tests.sh"),
+    Path("database/kane-db.sh"),
     Path("database/migrations/README.md"),
     Path("database/tools/README.md"),
     Path("database/tests/README.md"),
     Path("database/tests/test_repository_skeleton.py"),
+    Path("database/tests/test_geopackage_core.py"),
+    Path("database/migrations/0001_geopackage_core.sql"),
+    Path("database/tools/kane_db.py"),
     Path("tools/verify_repository.py"),
 )
 
@@ -116,7 +120,11 @@ def verify_python_syntax(root: Path) -> int:
 
 
 def verify_shell_entry_points(root: Path) -> int:
-    scripts = (root / "verify-linux.sh", root / "database/run-tests.sh")
+    scripts = (
+        root / "verify-linux.sh",
+        root / "database/run-tests.sh",
+        root / "database/kane-db.sh",
+    )
     for script in scripts:
         text = script.read_text(encoding="utf-8")
         if not text.startswith("#!/usr/bin/env bash\n"):
