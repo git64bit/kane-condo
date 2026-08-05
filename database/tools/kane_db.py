@@ -31,6 +31,8 @@ REQUIRED_TABLES = {
     "source_county_boundary",
     "source_map_feature",
     "source_building",
+    "project_building",
+    "project_building_source_mapping",
     "schema_migration",
     "gpkg_spatial_ref_sys",
     "gpkg_contents",
@@ -115,6 +117,25 @@ CORE_COLUMNS = {
         ("max_x", "DOUBLE", 1, 0),
         ("max_y", "DOUBLE", 1, 0),
         ("created_at", "DATETIME", 1, 0),
+    ),
+    "project_building": (
+        ("project_building_id", "INTEGER", 0, 1),
+        ("building_key", "TEXT", 1, 0),
+        ("lifecycle_status", "TEXT", 1, 0),
+        ("created_from_source_building_id", "INTEGER", 1, 0),
+        ("identity_algorithm", "TEXT", 1, 0),
+        ("created_at", "DATETIME", 1, 0),
+        ("retired_at", "DATETIME", 0, 0),
+    ),
+    "project_building_source_mapping": (
+        ("mapping_id", "INTEGER", 0, 1),
+        ("project_building_id", "INTEGER", 1, 0),
+        ("source_building_id", "INTEGER", 1, 0),
+        ("relationship_type", "TEXT", 1, 0),
+        ("decision_method", "TEXT", 1, 0),
+        ("mapping_status", "TEXT", 1, 0),
+        ("created_at", "DATETIME", 1, 0),
+        ("reviewed_at", "DATETIME", 0, 0),
     ),
     "source_map_feature": (
         ("source_map_feature_id", "INTEGER", 0, 1),
@@ -423,6 +444,22 @@ def validate_core_schema(connection: sqlite3.Connection) -> list[str]:
         ).fetchone()
         if building_geometry != ("geometry", "GEOMETRY", 4326, 0, 0):
             errors.append("source_building has an invalid geometry registration")
+
+        for table, identifier in (
+            ("project_building", "Kane Condo project buildings"),
+            ("project_building_source_mapping", "Kane Condo building mappings"),
+        ):
+            project_content = connection.execute(
+                "SELECT data_type, identifier, srs_id, last_change FROM gpkg_contents "
+                "WHERE table_name = ?",
+                (table,),
+            ).fetchone()
+            if project_content is None:
+                errors.append(f"{table} is not registered in gpkg_contents")
+            elif project_content[:3] != ("attributes", identifier, None):
+                errors.append(f"{table} has an invalid gpkg_contents registration")
+            elif not valid_datetime(project_content[3]):
+                errors.append(f"{table} gpkg_contents last_change is invalid")
 
     except sqlite3.Error as exc:
         errors.append(f"GeoPackage core data validation failed: {exc}")

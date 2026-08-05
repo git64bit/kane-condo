@@ -249,7 +249,7 @@ class OfficialBuildingStorageTests(unittest.TestCase):
                 ).fetchone(),
             )
             self.assertEqual(
-                5, connection.execute("SELECT COUNT(*) FROM schema_migration").fetchone()[0]
+                6, connection.execute("SELECT COUNT(*) FROM schema_migration").fetchone()[0]
             )
         finally:
             connection.close()

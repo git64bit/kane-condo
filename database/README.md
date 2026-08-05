@@ -21,6 +21,7 @@ kane-provenance.sh   Administrative provenance entry point
 kane-boundary.sh     County-boundary storage entry point
 kane-map-layers.sh   Roads-and-water storage entry point
 kane-buildings.sh    Official building-release storage entry point
+kane-project-buildings.sh Project-owned building identity entry point
 run-tests.sh         Repeatable database test entry point
 ```
 
@@ -34,6 +35,7 @@ The current migrations establish:
 - immutable county-boundary features grouped by source release;
 - immutable roads and water features grouped by source release;
 - immutable official building footprints grouped by source release;
+- project-owned building identities and auditable official-footprint mappings;
 - exact source-file, source-order, geometry, attributes, content, and bounds identities.
 
 Create a temporary database outside the repository:
@@ -73,6 +75,14 @@ bash database/kane-buildings.sh import /tmp/kane-condo.gpkg \
   BUILDING_RELEASE /path/to/buildings.geojson
 bash database/kane-buildings.sh validate /tmp/kane-condo.gpkg
 bash database/kane-buildings.sh info /tmp/kane-condo.gpkg
+```
+
+Create deterministic project-owned identities from the accepted official building release:
+
+```bash
+bash database/kane-project-buildings.sh seed /tmp/kane-condo.gpkg BUILDING_RELEASE
+bash database/kane-project-buildings.sh validate /tmp/kane-condo.gpkg
+bash database/kane-project-buildings.sh info /tmp/kane-condo.gpkg BUILDING_RELEASE
 ```
 
 The commands refuse unsafe or inconsistent input and validate writes before completion. The actual accepted donor boundary remains external until the later verified seed-import batch.

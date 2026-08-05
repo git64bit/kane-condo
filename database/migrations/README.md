@@ -16,6 +16,7 @@ Current migrations:
 0003_county_boundary.sql
 0004_roads_water_storage.sql
 0005_official_building_storage.sql
+0006_project_building_identity.sql
 ```
 
 Rules:
@@ -40,5 +41,7 @@ Rules:
 `0004_roads_water_storage.sql` registers immutable LineString, MultiLineString, Polygon, and MultiPolygon road and water features in EPSG:4326, preserving source order, release lineage, hashes, and bounds.
 
 `0005_official_building_storage.sql` registers immutable Polygon and MultiPolygon official building footprints in EPSG:4326, preserving declared source identity, source order, release lineage, hashes, attributes, and bounds.
+
+`0006_project_building_identity.sql` adds project-owned building identities and many-to-many official-footprint mappings while enforcing deterministic one-to-one initial origins.
 
 Migration files are part of the database identity. Changing an accepted migration causes validation to fail rather than silently rewriting history.

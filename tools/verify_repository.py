@@ -27,6 +27,7 @@ REQUIRED_FILES = (
     Path("database/kane-boundary.sh"),
     Path("database/kane-map-layers.sh"),
     Path("database/kane-buildings.sh"),
+    Path("database/kane-project-buildings.sh"),
     Path("database/migrations/README.md"),
     Path("database/tools/README.md"),
     Path("database/tests/README.md"),
@@ -36,17 +37,20 @@ REQUIRED_FILES = (
     Path("database/tests/test_county_boundary.py"),
     Path("database/tests/test_roads_water_storage.py"),
     Path("database/tests/test_official_building_storage.py"),
+    Path("database/tests/test_project_building_identity.py"),
     Path("database/migrations/0001_geopackage_core.sql"),
     Path("database/migrations/0002_administrative_provenance.sql"),
     Path("database/migrations/0003_county_boundary.sql"),
     Path("database/migrations/0004_roads_water_storage.sql"),
     Path("database/migrations/0005_official_building_storage.sql"),
+    Path("database/migrations/0006_project_building_identity.sql"),
     Path("database/tools/kane_db.py"),
     Path("database/tools/kane_provenance.py"),
     Path("database/tools/kane_geometry.py"),
     Path("database/tools/kane_boundary.py"),
     Path("database/tools/kane_map_layers.py"),
     Path("database/tools/kane_buildings.py"),
+    Path("database/tools/kane_project_buildings.py"),
     Path("tools/verify_repository.py"),
 )
 
@@ -145,6 +149,7 @@ def verify_shell_entry_points(root: Path) -> int:
         root / "database/kane-boundary.sh",
         root / "database/kane-map-layers.sh",
         root / "database/kane-buildings.sh",
+        root / "database/kane-project-buildings.sh",
     )
     for script in scripts:
         text = script.read_text(encoding="utf-8")

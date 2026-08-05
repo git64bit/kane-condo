@@ -82,6 +82,22 @@ Use:
 bash database/kane-buildings.sh --help
 ```
 
+## Project-building identity command
+
+`kane_project_buildings.py` supports:
+
+```text
+seed      Create deterministic project identities from one accepted building release
+info      Report project identities, mapping counts, and accepted-release coverage
+validate  Validate deterministic keys, origins, mappings, and accepted-release coverage
+```
+
+Use:
+
+```bash
+bash database/kane-project-buildings.sh --help
+```
+
 `kane_geometry.py` provides strict EPSG:4326 line and polygon normalization and GeoPackage binary encoding/decoding for county boundary, roads, water, official buildings, and later spatial migrations.
 
 All commands use Python's standard library. They run on server-side Linux infrastructure, keep production data outside Git, and do not move processing onto Windows or Ubuntu user workstations.

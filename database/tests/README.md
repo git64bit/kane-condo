@@ -19,3 +19,5 @@ Batch 010 tests county-boundary GeoPackage registration, Polygon and MultiPolygo
 Batch 011 tests immutable road and water GeoPackage registration, line and polygon geometry, source order, atomic multi-release import, exact source evidence, tamper detection, bounds, and public map-layer commands.
 
 Batch 012 tests immutable official building-release storage, Polygon and MultiPolygon geometry, holes, declared source identity, exact source evidence, source order, hashes, bounds, tamper detection, and public building commands.
+
+Batch 013 tests deterministic project-owned building identities, one-to-one initial mappings, source-release independence, future split/merge mapping capacity, tamper detection, coverage validation, and public identity commands.
