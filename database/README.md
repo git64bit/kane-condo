@@ -22,6 +22,9 @@ kane-boundary.sh     County-boundary storage entry point
 kane-map-layers.sh   Roads-and-water storage entry point
 kane-buildings.sh    Official building-release storage entry point
 kane-project-buildings.sh Project-owned building identity entry point
+kane-classifications.sh Authoritative classification history entry point
+kane-seed-import.sh Verified donor seed-import entry point
+seed/                 Versioned external seed identity contracts
 run-tests.sh         Repeatable database test entry point
 ```
 
@@ -37,7 +40,8 @@ The current migrations establish:
 - immutable official building footprints grouped by source release;
 - project-owned building identities and auditable official-footprint mappings;
 - authoritative current building classifications and append-only history;
-- exact source-file, source-order, geometry, attributes, content, and bounds identities.
+- exact source-file, source-order, geometry, attributes, content, and bounds identities;
+- verified clean seed import from the accepted donor GeoPackage, with an external audit report.
 
 Create a temporary database outside the repository:
 
@@ -96,7 +100,23 @@ bash database/kane-classifications.sh undo /tmp/kane-condo.gpkg BUILDING_KEY req
 bash database/kane-classifications.sh validate /tmp/kane-condo.gpkg
 ```
 
-The commands refuse unsafe or inconsistent input and validate writes before completion. The actual accepted donor boundary remains external until the later verified seed-import batch.
+Build the first production seed database from the exact accepted donor GeoPackage. Both the donor and generated database remain outside Git:
+
+```bash
+mkdir -p /root/kane-condo-data/database /root/kane-condo-data/audit
+
+bash database/kane-seed-import.sh import \
+  /root/kane-offline-data/database/kane-county.gpkg \
+  /root/kane-condo-data/database/kane-condo.gpkg \
+  /root/kane-condo-data/audit/seed-import.json
+
+bash database/kane-seed-import.sh validate \
+  /root/kane-condo-data/database/kane-condo.gpkg
+```
+
+The seed command verifies the donor byte length, SHA-256, source commit, accepted release keys, release content hashes, and canonical feature totals before creating a new Kane Condo database. It imports no County Field Map classification, calibration, cell-relation, or review tables. The donor is opened read-only and verified unchanged after import.
+
+All commands refuse unsafe or inconsistent input and validate writes before completion.
 
 ## Test entry point
 

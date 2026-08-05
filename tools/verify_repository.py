@@ -29,6 +29,9 @@ REQUIRED_FILES = (
     Path("database/kane-buildings.sh"),
     Path("database/kane-project-buildings.sh"),
     Path("database/kane-classifications.sh"),
+    Path("database/kane-seed-import.sh"),
+    Path("database/seed/README.md"),
+    Path("database/seed/kane-offline-map-0911eeef.json"),
     Path("database/migrations/README.md"),
     Path("database/tools/README.md"),
     Path("database/tests/README.md"),
@@ -40,6 +43,7 @@ REQUIRED_FILES = (
     Path("database/tests/test_official_building_storage.py"),
     Path("database/tests/test_project_building_identity.py"),
     Path("database/tests/test_classification_history.py"),
+    Path("database/tests/test_seed_import.py"),
     Path("database/migrations/0001_geopackage_core.sql"),
     Path("database/migrations/0002_administrative_provenance.sql"),
     Path("database/migrations/0003_county_boundary.sql"),
@@ -55,6 +59,7 @@ REQUIRED_FILES = (
     Path("database/tools/kane_buildings.py"),
     Path("database/tools/kane_project_buildings.py"),
     Path("database/tools/kane_classifications.py"),
+    Path("database/tools/kane_seed_import.py"),
     Path("tools/verify_repository.py"),
 )
 
@@ -155,6 +160,7 @@ def verify_shell_entry_points(root: Path) -> int:
         root / "database/kane-buildings.sh",
         root / "database/kane-project-buildings.sh",
         root / "database/kane-classifications.sh",
+        root / "database/kane-seed-import.sh",
     )
     for script in scripts:
         text = script.read_text(encoding="utf-8")

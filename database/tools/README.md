@@ -117,6 +117,23 @@ Use:
 bash database/kane-classifications.sh --help
 ```
 
+## Seed-import command
+
+`kane_seed_import.py` supports:
+
+```text
+import    Build a clean Kane Condo database from an approved donor and write an audit report
+validate  Validate a generated seed database and confirm it has no explicit classifications
+```
+
+The default contract is `database/seed/kane-offline-map-0911eeef.json`. The donor database is opened read-only, verified by byte length and SHA-256, and left unchanged. Output databases and audit reports must be outside Git.
+
+Use:
+
+```bash
+bash database/kane-seed-import.sh --help
+```
+
 `kane_geometry.py` provides strict EPSG:4326 line and polygon normalization and GeoPackage binary encoding/decoding for county boundary, roads, water, official buildings, and later spatial migrations.
 
 All commands use Python's standard library. They run on server-side Linux infrastructure, keep production data outside Git, and do not move processing onto Windows or Ubuntu user workstations.

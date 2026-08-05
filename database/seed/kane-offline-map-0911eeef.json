@@ -1,0 +1,59 @@
+{
+  "contract_key": "kane-offline-map-0911eeef",
+  "donor": {
+    "byte_length": 324886528,
+    "sha256": "7fe2198b00b2d0dee9470eda3864b43b6f7b3b0ff3b236ce7c579ddc077f389a",
+    "source_commit": "0911eeefeafbb18c58af0618200ba9edead29bdc"
+  },
+  "expected_releases": [
+    {
+      "content_sha256": "73cb32426b22bcf73f08c6356d4e39eb72d878192d1bdc33385b87af0193bfc6",
+      "data_kind": "boundary",
+      "dataset_key": "county-boundary",
+      "id_property": "OBJECTID",
+      "release_key": "kane-county-boundary-20230509-73cb32426b22"
+    },
+    {
+      "content_sha256": "028e3c1dc7a6eede26ed3295d8c17ff524a15d7f1eadb13747836fae777e1eb3",
+      "data_kind": "roads",
+      "dataset_key": "roads",
+      "id_property": "OBJECTID",
+      "release_key": "kane-roads-20250730-028e3c1dc7a6"
+    },
+    {
+      "content_sha256": "905d93f928d2f4e4c9c8257c32e2639f29cb398984681a15149ad4a756b7f1a2",
+      "data_kind": "water",
+      "dataset_key": "water-fox-river",
+      "id_property": "OBJECTID",
+      "release_key": "kane-water-fox-river-20250717-905d93f928d2"
+    },
+    {
+      "content_sha256": "249c70f01dbca57f90f22acf254b8d0ffe71bc5f5bf92f5e70103250f1ed1f5d",
+      "data_kind": "water",
+      "dataset_key": "water-creeks",
+      "id_property": "OBJECTID",
+      "release_key": "kane-water-creeks-20250717-249c70f01dbc"
+    },
+    {
+      "content_sha256": "086f09eba5ad5b21eea1b6c9a8158eaf8c509a258c53509d115eaf1d19a7f799",
+      "data_kind": "buildings",
+      "dataset_key": "buildings",
+      "id_property": "FPId",
+      "release_key": "kane-buildings-20250730-086f09eba5ad"
+    }
+  ],
+  "expected_totals": {
+    "boundary": 1,
+    "buildings": 208324,
+    "roads": 27675,
+    "water": 556
+  },
+  "excluded_donor_tables": [
+    "building_cell_relation",
+    "classification_cell",
+    "classification_grid_calibration",
+    "classification_release",
+    "classification_review",
+    "classification_sector"
+  ]
+}
