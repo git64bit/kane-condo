@@ -15,6 +15,7 @@ Current migrations:
 0002_administrative_provenance.sql
 0003_county_boundary.sql
 0004_roads_water_storage.sql
+0005_official_building_storage.sql
 ```
 
 Rules:
@@ -37,5 +38,7 @@ Rules:
 `0003_county_boundary.sql` registers immutable Polygon or MultiPolygon county-boundary features in EPSG:4326 and associates each feature with one official source release and one preserved source file.
 
 `0004_roads_water_storage.sql` registers immutable LineString, MultiLineString, Polygon, and MultiPolygon road and water features in EPSG:4326, preserving source order, release lineage, hashes, and bounds.
+
+`0005_official_building_storage.sql` registers immutable Polygon and MultiPolygon official building footprints in EPSG:4326, preserving declared source identity, source order, release lineage, hashes, attributes, and bounds.
 
 Migration files are part of the database identity. Changing an accepted migration causes validation to fail rather than silently rewriting history.

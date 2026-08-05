@@ -66,6 +66,22 @@ Use:
 bash database/kane-map-layers.sh --help
 ```
 
-`kane_geometry.py` provides strict EPSG:4326 line and polygon normalization and GeoPackage binary encoding/decoding for county boundary, roads, water, and later spatial migrations.
+## Official-building command
+
+`kane_buildings.py` supports:
+
+```text
+import    Store one Polygon or MultiPolygon official building release
+info      Report the accepted or named stored building release
+validate  Validate registration, geometry, source order, hashes, bounds, identity, and lineage
+```
+
+Use:
+
+```bash
+bash database/kane-buildings.sh --help
+```
+
+`kane_geometry.py` provides strict EPSG:4326 line and polygon normalization and GeoPackage binary encoding/decoding for county boundary, roads, water, official buildings, and later spatial migrations.
 
 All commands use Python's standard library. They run on server-side Linux infrastructure, keep production data outside Git, and do not move processing onto Windows or Ubuntu user workstations.

@@ -121,7 +121,7 @@ class AdministrativeProvenanceTests(unittest.TestCase):
             }
             self.assertEqual(provenance.ADMIN_TABLES, tables)
             self.assertEqual(
-                4,
+                5,
                 connection.execute("SELECT COUNT(*) FROM schema_migration").fetchone()[0],
             )
         finally:

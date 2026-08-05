@@ -67,7 +67,7 @@ class GeoPackageCoreTests(unittest.TestCase):
             }
             self.assertEqual(kane_db.REQUIRED_TABLES, tables)
             self.assertEqual(
-                2, connection.execute("SELECT COUNT(*) FROM gpkg_geometry_columns").fetchone()[0]
+                3, connection.execute("SELECT COUNT(*) FROM gpkg_geometry_columns").fetchone()[0]
             )
             self.assertEqual(
                 0, connection.execute("SELECT COUNT(*) FROM gpkg_extensions").fetchone()[0]
@@ -115,7 +115,7 @@ class GeoPackageCoreTests(unittest.TestCase):
         self.assertEqual("1.4.0", info["geopackage_version"])
         self.assertEqual(kane_db.GPKG_APPLICATION_ID, info["application_id"])
         self.assertEqual(kane_db.GPKG_USER_VERSION, info["user_version"])
-        self.assertEqual(4, len(info["migrations"]))
+        self.assertEqual(5, len(info["migrations"]))
         self.assertEqual(MIGRATION_PATH.name, info["migrations"][0]["filename"])
 
     def test_refuses_non_geopackage_extension(self) -> None:
