@@ -15,3 +15,5 @@ Batch 008 tests the GeoPackage 1.4.0 header, required metadata, migration identi
 Batch 009 tests administrative provenance, preserved source-file identities, release lineage, one accepted release per dataset, and provenance commands.
 
 Batch 010 tests county-boundary GeoPackage registration, Polygon and MultiPolygon storage, holes, exact bounds and hashes, source-file association, malformed input rejection, tamper detection, and boundary commands.
+
+Batch 011 tests immutable road and water GeoPackage registration, line and polygon geometry, source order, atomic multi-release import, exact source evidence, tamper detection, bounds, and public map-layer commands.

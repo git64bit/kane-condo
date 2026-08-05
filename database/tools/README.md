@@ -50,6 +50,22 @@ Use:
 bash database/kane-boundary.sh --help
 ```
 
-`kane_geometry.py` provides strict EPSG:4326 polygon normalization and GeoPackage binary encoding/decoding for the boundary command and later spatial migrations.
+## Roads-and-water command
+
+`kane_map_layers.py` supports:
+
+```text
+import    Atomically store one or more RELEASE_KEY GEOJSON pairs
+info      Report accepted or named stored road and water releases
+validate  Validate registration, geometry, source order, hashes, bounds, and lineage
+```
+
+Use:
+
+```bash
+bash database/kane-map-layers.sh --help
+```
+
+`kane_geometry.py` provides strict EPSG:4326 line and polygon normalization and GeoPackage binary encoding/decoding for county boundary, roads, water, and later spatial migrations.
 
 All commands use Python's standard library. They run on server-side Linux infrastructure, keep production data outside Git, and do not move processing onto Windows or Ubuntu user workstations.

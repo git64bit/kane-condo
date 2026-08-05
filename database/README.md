@@ -19,6 +19,7 @@ tests/               Standard-library database tests
 kane-db.sh           GeoPackage command entry point
 kane-provenance.sh   Administrative provenance entry point
 kane-boundary.sh     County-boundary storage entry point
+kane-map-layers.sh   Roads-and-water storage entry point
 run-tests.sh         Repeatable database test entry point
 ```
 
@@ -30,7 +31,8 @@ The current migrations establish:
 - exact SHA-256 migration identity;
 - Kane County, source-agency, dataset, harvest, source-file, and source-release provenance;
 - immutable county-boundary features grouped by source release;
-- exact source-file, geometry, attributes, content, and bounds identities.
+- immutable roads and water features grouped by source release;
+- exact source-file, source-order, geometry, attributes, content, and bounds identities.
 
 Create a temporary database outside the repository:
 
@@ -47,6 +49,18 @@ bash database/kane-provenance.sh record /tmp/kane-condo.gpkg /path/to/release.js
 bash database/kane-boundary.sh import /tmp/kane-condo.gpkg RELEASE_KEY /path/to/boundary.geojson
 bash database/kane-boundary.sh validate /tmp/kane-condo.gpkg
 bash database/kane-boundary.sh info /tmp/kane-condo.gpkg
+```
+
+Record road and water release descriptors, then import one or more release/file pairs atomically:
+
+```bash
+bash database/kane-provenance.sh record /tmp/kane-condo.gpkg /path/to/roads-release.json
+bash database/kane-provenance.sh record /tmp/kane-condo.gpkg /path/to/river-release.json
+bash database/kane-map-layers.sh import /tmp/kane-condo.gpkg \
+  ROADS_RELEASE /path/to/roads.geojson \
+  RIVER_RELEASE /path/to/fox-river.geojson
+bash database/kane-map-layers.sh validate /tmp/kane-condo.gpkg
+bash database/kane-map-layers.sh info /tmp/kane-condo.gpkg
 ```
 
 The commands refuse unsafe or inconsistent input and validate writes before completion. The actual accepted donor boundary remains external until the later verified seed-import batch.
