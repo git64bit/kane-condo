@@ -25,3 +25,5 @@ Batch 013 tests deterministic project-owned building identities, one-to-one init
 Batch 014 tests default Unclassified state, explicit current classifications, append-only history, correction, undo, idempotent event keys, stale-state rejection, and classification commands.
 
 Batch 015 tests exact donor identity enforcement, accepted-release and feature-total contracts, clean target creation, geometry and provenance transfer, deterministic project-identity seeding, zero explicit classifications, rejected donor-table exclusion, audit generation, overwrite refusal, donor immutability, and the public seed-import command.
+
+Batch 016 tests the exact five-profile registry, strict JSON parsing, donor provenance, endpoint and service/layer identity, requested fields, geometry, exact-ID pagination, coordinated water updates, deterministic canonical hashing, malformed registries, and the public source-profile command.

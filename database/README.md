@@ -9,6 +9,7 @@ This directory contains the authoritative SQLite/GeoPackage migration workspace,
 - County Field Map classification, grid calibration, cell relations, and review tables are excluded.
 - Production databases, harvests, backups, and generated packages remain outside Git.
 - Workstations do not run migrations or county-wide processing.
+- Official source-profile validation is offline and makes no network requests.
 
 ## Layout
 
@@ -24,9 +25,23 @@ kane-buildings.sh    Official building-release storage entry point
 kane-project-buildings.sh Project-owned building identity entry point
 kane-classifications.sh Authoritative classification history entry point
 kane-seed-import.sh Verified donor seed-import entry point
+kane-source-profiles.sh Official source-profile registry entry point
 seed/                 Versioned external seed identity contracts
+source-profiles/      Versioned official acquisition contracts
 run-tests.sh         Repeatable database test entry point
 ```
+
+## Official source-profile registry
+
+Validate, inspect, or deterministically hash the five approved official acquisition contracts without contacting the network:
+
+```bash
+bash database/kane-source-profiles.sh validate
+bash database/kane-source-profiles.sh info
+bash database/kane-source-profiles.sh hash
+```
+
+The registry preserves donor-derived endpoints, identities, requested fields, and geometry declarations while adding Kane Condo pagination, ordering, response-validation, and coordinated water-update rules. It contains no harvested or production data.
 
 ## Current database foundation
 

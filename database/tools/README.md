@@ -2,6 +2,24 @@
 
 This directory contains controlled server-side commands for Kane Condo database work.
 
+## Official source-profile command
+
+`kane_source_profiles.py` supports:
+
+```text
+validate  Validate exactly five approved offline source contracts
+info      Report the normalized profiles and deterministic registry identity
+hash      Report the deterministic registry SHA-256
+```
+
+The command uses only version-controlled JSON contracts. It performs no network requests, downloads, update checks, or production-database changes.
+
+Use:
+
+```bash
+bash database/kane-source-profiles.sh --help
+```
+
 ## GeoPackage command
 
 `kane_db.py` supports:

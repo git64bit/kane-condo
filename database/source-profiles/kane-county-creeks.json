@@ -1,0 +1,53 @@
+{
+  "registry_profile_schema": 1,
+  "profile_key": "kane-county-creeks",
+  "agency_key": "kane-county-gis",
+  "dataset_key": "water-creeks",
+  "donor": {
+    "repository": "https://github.com/git64bit/kane-offline-map",
+    "commit": "0911eeefeafbb18c58af0618200ba9edead29bdc",
+    "path": "database/sources/kane-county-creeks.json",
+    "file_sha256": "21c043a3c8c3319fb42c4038be5400bb9c28380730b62792e4f7c4e1cc3d8f1c",
+    "profile_schema": 1
+  },
+  "source": {
+    "layer_url": "https://services1.arcgis.com/oRKmdBXD6EbdmVgJ/ArcGIS/rest/services/KaneCo_IL_Creeks/FeatureServer/1",
+    "service_name": "KaneCo_IL_Creeks",
+    "layer_id": 1
+  },
+  "query": {
+    "where": "1=1",
+    "object_id_field": "OBJECTID",
+    "identity_field": "OBJECTID",
+    "out_srs": 4326,
+    "page_size": 2000,
+    "out_fields": [
+      "OBJECTID"
+    ]
+  },
+  "geometry": {
+    "arcgis_type": "esriGeometryPolyline",
+    "geojson_types": [
+      "LineString",
+      "MultiLineString"
+    ],
+    "missing_geometry_policy": "reject",
+    "missing_geometry_policy_origin": "donor-default"
+  },
+  "pagination": {
+    "mode": "exact-object-id-groups",
+    "inventory_query": "returnIdsOnly",
+    "ordering": "ascending-numeric",
+    "respect_service_max_record_count": true,
+    "offset_pagination": false,
+    "require_exact_requested_ids": true
+  },
+  "validation": {
+    "identity": "required-unique",
+    "schema": "requested-fields-present",
+    "geometry": "declared-types-only",
+    "response": "geojson-feature-collection"
+  },
+  "copyright_text": "Kane County, GIS",
+  "update_group": "water-context"
+}

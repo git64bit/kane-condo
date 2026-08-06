@@ -1,0 +1,52 @@
+{
+  "registry_profile_schema": 1,
+  "profile_key": "kane-county-road-centerlines",
+  "agency_key": "kane-county-gis",
+  "dataset_key": "roads",
+  "donor": {
+    "repository": "https://github.com/git64bit/kane-offline-map",
+    "commit": "0911eeefeafbb18c58af0618200ba9edead29bdc",
+    "path": "database/sources/kane-county-roads.json",
+    "file_sha256": "f3c44d95a8557a4c281250f1a940574da3495fed2c42991ff7de13fa10bf2dca",
+    "profile_schema": 1
+  },
+  "source": {
+    "layer_url": "https://services1.arcgis.com/oRKmdBXD6EbdmVgJ/ArcGIS/rest/services/KaneCo_IL_Centerlines_ROW/FeatureServer/1",
+    "service_name": "KaneCo_IL_Centerlines_ROW",
+    "layer_id": 1
+  },
+  "query": {
+    "where": "1=1",
+    "object_id_field": "OBJECTID",
+    "identity_field": "OBJECTID",
+    "out_srs": 4326,
+    "page_size": 2000,
+    "out_fields": [
+      "OBJECTID"
+    ]
+  },
+  "geometry": {
+    "arcgis_type": "esriGeometryPolyline",
+    "geojson_types": [
+      "LineString",
+      "MultiLineString"
+    ],
+    "missing_geometry_policy": "exclude",
+    "missing_geometry_policy_origin": "donor-explicit"
+  },
+  "pagination": {
+    "mode": "exact-object-id-groups",
+    "inventory_query": "returnIdsOnly",
+    "ordering": "ascending-numeric",
+    "respect_service_max_record_count": true,
+    "offset_pagination": false,
+    "require_exact_requested_ids": true
+  },
+  "validation": {
+    "identity": "required-unique",
+    "schema": "requested-fields-present",
+    "geometry": "declared-types-only",
+    "response": "geojson-feature-collection"
+  },
+  "copyright_text": "Kane County, GIS"
+}

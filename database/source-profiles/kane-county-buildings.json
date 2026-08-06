@@ -1,0 +1,69 @@
+{
+  "registry_profile_schema": 1,
+  "profile_key": "kane-county-building-footprints",
+  "agency_key": "kane-county-gis",
+  "dataset_key": "buildings",
+  "donor": {
+    "repository": "https://github.com/git64bit/kane-offline-map",
+    "commit": "0911eeefeafbb18c58af0618200ba9edead29bdc",
+    "path": "database/sources/kane-county-buildings.json",
+    "file_sha256": "f716a10f286998a0d0169126fbea2d7d7c063cc0007b4bc57bfa08c7be2896cf",
+    "profile_schema": 1
+  },
+  "source": {
+    "layer_url": "https://services1.arcgis.com/oRKmdBXD6EbdmVgJ/ArcGIS/rest/services/KaneCo_IL_BuildingFootprints/FeatureServer/0",
+    "service_name": "KaneCo_IL_BuildingFootprints",
+    "layer_id": 0
+  },
+  "query": {
+    "where": "1=1",
+    "object_id_field": "OBJECTID",
+    "identity_field": "FPId",
+    "out_srs": 4326,
+    "page_size": 2000,
+    "out_fields": [
+      "OBJECTID",
+      "FPId",
+      "CommonName",
+      "Active",
+      "FirstYear",
+      "LastYear",
+      "FrstFlrElev",
+      "FFESource",
+      "FloodZone",
+      "SourceData",
+      "Notes",
+      "ESRICarto",
+      "AddUser",
+      "AddDate",
+      "EditUser",
+      "EditDate",
+      "Shape__Area",
+      "Shape__Length"
+    ]
+  },
+  "geometry": {
+    "arcgis_type": "esriGeometryPolygon",
+    "geojson_types": [
+      "Polygon",
+      "MultiPolygon"
+    ],
+    "missing_geometry_policy": "reject",
+    "missing_geometry_policy_origin": "donor-default"
+  },
+  "pagination": {
+    "mode": "exact-object-id-groups",
+    "inventory_query": "returnIdsOnly",
+    "ordering": "ascending-numeric",
+    "respect_service_max_record_count": true,
+    "offset_pagination": false,
+    "require_exact_requested_ids": true
+  },
+  "validation": {
+    "identity": "required-unique",
+    "schema": "requested-fields-present",
+    "geometry": "declared-types-only",
+    "response": "geojson-feature-collection"
+  },
+  "copyright_text": "Kane County, GIS"
+}

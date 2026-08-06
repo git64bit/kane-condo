@@ -1,0 +1,53 @@
+{
+  "registry_profile_schema": 1,
+  "profile_key": "kane-county-boundary",
+  "agency_key": "kane-county-gis",
+  "dataset_key": "county-boundary",
+  "donor": {
+    "repository": "https://github.com/git64bit/kane-offline-map",
+    "commit": "0911eeefeafbb18c58af0618200ba9edead29bdc",
+    "path": "database/sources/kane-county-boundary.json",
+    "file_sha256": "c67ad4b470f4c9ba88dc42583d4a28c56c6bd5d7adeb0b2eebd9bb28430fac40",
+    "profile_schema": 1
+  },
+  "source": {
+    "layer_url": "https://services1.arcgis.com/oRKmdBXD6EbdmVgJ/ArcGIS/rest/services/County_Boundary/FeatureServer/0",
+    "service_name": "County_Boundary",
+    "layer_id": 0
+  },
+  "query": {
+    "where": "1=1",
+    "object_id_field": "OBJECTID",
+    "identity_field": "OBJECTID",
+    "out_srs": 4326,
+    "page_size": 2000,
+    "out_fields": [
+      "OBJECTID"
+    ]
+  },
+  "geometry": {
+    "arcgis_type": "esriGeometryPolygon",
+    "geojson_types": [
+      "Polygon",
+      "MultiPolygon"
+    ],
+    "missing_geometry_policy": "reject",
+    "missing_geometry_policy_origin": "donor-default"
+  },
+  "pagination": {
+    "mode": "exact-object-id-groups",
+    "inventory_query": "returnIdsOnly",
+    "ordering": "ascending-numeric",
+    "respect_service_max_record_count": true,
+    "offset_pagination": false,
+    "require_exact_requested_ids": true
+  },
+  "validation": {
+    "identity": "required-unique",
+    "schema": "requested-fields-present",
+    "geometry": "declared-types-only",
+    "response": "geojson-feature-collection"
+  },
+  "copyright_text": "Kane County, GIS",
+  "expected_feature_count": 1
+}
