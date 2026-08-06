@@ -36,6 +36,25 @@ Use:
 bash database/kane-source-status.sh --help
 ```
 
+## Official building candidate command
+
+`kane_building_candidate.py` supports:
+
+```text
+harvest   Harvest a complete official-building candidate into external staging
+validate  Validate one staged candidate without network or database writes
+register  Register validated candidate provenance without changing the accepted release
+info      Trace one registered building candidate
+```
+
+The harvest uses the approved building profile, complete object-ID inventory, exact bounded ID groups, stable `FPId` identities, canonical serialization, end-of-harvest metadata and inventory verification, and immutable candidate directory identity. Registration writes only the candidate harvest, source-file identities, and candidate release provenance. It does not import candidate features, change the accepted release, or alter project identities or classifications.
+
+Use:
+
+```bash
+bash database/kane-building-candidate.sh --help
+```
+
 ## GeoPackage command
 
 `kane_db.py` supports:

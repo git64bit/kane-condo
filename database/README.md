@@ -11,6 +11,7 @@ This directory contains the authoritative SQLite/GeoPackage migration workspace,
 - Workstations do not run migrations or county-wide processing.
 - Official source-profile validation is offline and makes no network requests.
 - Lightweight source-status checks make bounded metadata and object-ID requests only; they never download feature geometry or write the accepted database.
+- Building candidate harvests write complete validated evidence to an external staging directory before registering candidate provenance; they never replace the accepted release.
 
 ## Layout
 
@@ -28,6 +29,7 @@ kane-classifications.sh Authoritative classification history entry point
 kane-seed-import.sh Verified donor seed-import entry point
 kane-source-profiles.sh Official source-profile registry entry point
 kane-source-status.sh Lightweight official-source status entry point
+kane-building-candidate.sh Official building candidate harvest entry point
 seed/                 Versioned external seed identity contracts
 source-profiles/      Versioned official acquisition contracts
 run-tests.sh         Repeatable database test entry point
@@ -55,6 +57,28 @@ bash database/kane-source-status.sh check \
 ```
 
 The command reads the accepted database in SQLite read-only/query-only mode. For each profile it requests only ArcGIS layer metadata and the complete object-ID inventory, then reports **Up to date**, **New source detected**, **Source unavailable**, or **Source changed unexpectedly**. It prefers the ArcGIS data-edit timestamp over schema-only edit timestamps, and Fox River plus creeks are summarized as the coordinated `water-context` group. Detection never registers a candidate, changes an accepted release, or writes harvested responses to Git or the production workspace.
+
+## Official building candidate harvest
+
+Harvest a complete official-building candidate into an external staging directory, validate the staged evidence offline, and register only its provenance as a `candidate` release:
+
+```bash
+bash database/kane-building-candidate.sh harvest \
+  /root/kane-condo-data/staging
+
+bash database/kane-building-candidate.sh validate \
+  /root/kane-condo-data/staging/buildings/CANDIDATE_RELEASE_KEY
+
+bash database/kane-building-candidate.sh register \
+  /root/kane-condo-data/database/kane-condo.gpkg \
+  /root/kane-condo-data/staging/buildings/CANDIDATE_RELEASE_KEY
+
+bash database/kane-building-candidate.sh info \
+  /root/kane-condo-data/database/kane-condo.gpkg \
+  CANDIDATE_RELEASE_KEY
+```
+
+The harvester retrieves the complete ascending object-ID inventory, requests exact bounded ID groups, validates all requested fields, requires unique `FPId` identities, normalizes Polygon and MultiPolygon geometry, rechecks metadata and the complete inventory after the final page, and writes canonical source, metadata, inventory, and manifest files. Registration is refused until the external candidate validates; it records provenance only and leaves the accepted building release, project identities, mappings, and classifications unchanged. Candidate directories and production databases remain outside Git.
 
 ## Current database foundation
 

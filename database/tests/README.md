@@ -29,3 +29,5 @@ Batch 015 tests exact donor identity enforcement, accepted-release and feature-t
 Batch 016 tests the exact five-profile registry, strict JSON parsing, donor provenance, endpoint and service/layer identity, requested fields, geometry, exact-ID pagination, coordinated water updates, deterministic canonical hashing, malformed registries, and the public source-profile command.
 
 Batch 017 tests read-only accepted-release loading, bounded metadata and object-ID checks, all four source-status outcomes, data-versus-schema edit timestamps, schema and geometry drift, fixed-count enforcement, inventory changes, status precedence, coordinated water reporting, database immutability, and the public source-status command.
+
+Batch 018 tests complete external building harvests, exact object-ID paging, end-of-harvest source rechecks, deterministic canonical candidates, requested-field and stable-identity enforcement, polygon validation, tamper and symlink rejection, offline revalidation, provenance-only candidate registration, idempotence, accepted-release preservation, and the public building-candidate command.
