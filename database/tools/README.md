@@ -20,6 +20,22 @@ Use:
 bash database/kane-source-profiles.sh --help
 ```
 
+## Official source-status command
+
+`kane_source_status.py` supports:
+
+```text
+check     Compare the accepted database with live layer metadata and object-ID inventories
+```
+
+The command opens the accepted GeoPackage read-only and query-only. Network requests are limited to the five approved ArcGIS metadata and `returnIdsOnly` endpoints; no feature geometry is downloaded and no candidate or accepted release is written.
+
+Use:
+
+```bash
+bash database/kane-source-status.sh --help
+```
+
 ## GeoPackage command
 
 `kane_db.py` supports:

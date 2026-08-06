@@ -10,6 +10,7 @@ This directory contains the authoritative SQLite/GeoPackage migration workspace,
 - Production databases, harvests, backups, and generated packages remain outside Git.
 - Workstations do not run migrations or county-wide processing.
 - Official source-profile validation is offline and makes no network requests.
+- Lightweight source-status checks make bounded metadata and object-ID requests only; they never download feature geometry or write the accepted database.
 
 ## Layout
 
@@ -26,6 +27,7 @@ kane-project-buildings.sh Project-owned building identity entry point
 kane-classifications.sh Authoritative classification history entry point
 kane-seed-import.sh Verified donor seed-import entry point
 kane-source-profiles.sh Official source-profile registry entry point
+kane-source-status.sh Lightweight official-source status entry point
 seed/                 Versioned external seed identity contracts
 source-profiles/      Versioned official acquisition contracts
 run-tests.sh         Repeatable database test entry point
@@ -42,6 +44,17 @@ bash database/kane-source-profiles.sh hash
 ```
 
 The registry preserves donor-derived endpoints, identities, requested fields, and geometry declarations while adding Kane Condo pagination, ordering, response-validation, and coordinated water-update rules. It contains no harvested or production data.
+
+## Lightweight source-status check
+
+Check the five approved services against the accepted production database without downloading feature geometry:
+
+```bash
+bash database/kane-source-status.sh check \
+  /root/kane-condo-data/database/kane-condo.gpkg
+```
+
+The command reads the accepted database in SQLite read-only/query-only mode. For each profile it requests only ArcGIS layer metadata and the complete object-ID inventory, then reports **Up to date**, **New source detected**, **Source unavailable**, or **Source changed unexpectedly**. It prefers the ArcGIS data-edit timestamp over schema-only edit timestamps, and Fox River plus creeks are summarized as the coordinated `water-context` group. Detection never registers a candidate, changes an accepted release, or writes harvested responses to Git or the production workspace.
 
 ## Current database foundation
 
