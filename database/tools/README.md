@@ -93,6 +93,25 @@ Use:
 bash database/kane-water-candidate.sh --help
 ```
 
+## County-boundary candidate command
+
+`kane_boundary_candidate.py` supports:
+
+```text
+harvest   Harvest one boundary candidate using the accepted boundary as its safety reference
+validate  Validate one staged boundary candidate offline
+register  Register candidate provenance without changing the accepted boundary
+info      Trace one registered county-boundary candidate
+```
+
+The harvest requires exactly one source identity, Polygon or MultiPolygon geometry, and gross bounds consistent with the accepted Kane County boundary. The staged manifest freezes the accepted county identity and boundary reference. Registration refuses stale references and writes no boundary geometry.
+
+Use:
+
+```bash
+bash database/kane-boundary-candidate.sh --help
+```
+
 ## GeoPackage command
 
 `kane_db.py` supports:

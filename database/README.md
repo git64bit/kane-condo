@@ -14,6 +14,7 @@ This directory contains the authoritative SQLite/GeoPackage migration workspace,
 - Building candidate harvests write complete validated evidence to an external staging directory before registering candidate provenance; they never replace the accepted release.
 - Road candidate harvests preserve the complete object-ID inventory, retained line geometry, and any explicitly excluded null-geometry IDs before provenance-only registration; they never replace the accepted road release.
 - Water candidate harvests treat Fox River and creeks as one coordinated `water-context` unit: both complete candidates must validate together and their provenance is registered atomically; neither accepted water release is replaced.
+- County-boundary candidate harvests use the accepted Kane County identity and boundary envelope as guards; unexpected identity, geometry, or gross bounds are rejected before provenance-only registration.
 
 ## Layout
 
@@ -34,6 +35,7 @@ kane-source-status.sh Lightweight official-source status entry point
 kane-building-candidate.sh Official building candidate harvest entry point
 kane-road-candidate.sh Official road candidate harvest entry point
 kane-water-candidate.sh Coordinated Fox River/creeks candidate harvest entry point
+kane-boundary-candidate.sh County-boundary candidate harvest entry point
 seed/                 Versioned external seed identity contracts
 source-profiles/      Versioned official acquisition contracts
 run-tests.sh         Repeatable database test entry point
@@ -127,6 +129,25 @@ bash database/kane-water-candidate.sh info \
 ```
 
 The harvester retrieves and rechecks complete object-ID inventories for both approved water profiles, validates creek line geometry and Fox River polygon geometry, rejects missing geometry, and writes one canonical group manifest linking both candidate releases. Registration is all-or-nothing: a partial `water-context` registration is rejected, accepted Fox River and creek releases remain unchanged, and no candidate geometry is imported during Batch 020.
+
+## County-boundary candidate harvest
+
+Harvest one complete boundary candidate using the accepted county boundary as the identity and gross-bounds reference, validate the staged evidence offline, and register provenance only:
+
+```bash
+bash database/kane-boundary-candidate.sh harvest \
+  /root/kane-condo-data/staging \
+  /root/kane-condo-data/database/kane-condo.gpkg
+
+bash database/kane-boundary-candidate.sh validate \
+  /root/kane-condo-data/staging/boundary/RELEASE_KEY
+
+bash database/kane-boundary-candidate.sh register \
+  /root/kane-condo-data/database/kane-condo.gpkg \
+  /root/kane-condo-data/staging/boundary/RELEASE_KEY
+```
+
+The harvester requires exactly one live object ID and the same source identity as the accepted Kane County boundary, validates Polygon or MultiPolygon geometry, and rejects gross envelope changes relative to the accepted boundary. Metadata and inventory are rechecked after the feature download. The staged manifest freezes the accepted county key, FIPS identity, accepted release hash, source identity, accepted bounds, and the deterministic gross-bounds policy so offline validation remains meaningful. Registration rechecks that accepted reference and writes only candidate provenance; it does not import candidate geometry or replace the accepted boundary.
 
 ## Current database foundation
 
