@@ -13,6 +13,7 @@ This directory contains the authoritative SQLite/GeoPackage migration workspace,
 - Lightweight source-status checks make bounded metadata and object-ID requests only; they never download feature geometry or write the accepted database.
 - Building candidate harvests write complete validated evidence to an external staging directory before registering candidate provenance; they never replace the accepted release.
 - Road candidate harvests preserve the complete object-ID inventory, retained line geometry, and any explicitly excluded null-geometry IDs before provenance-only registration; they never replace the accepted road release.
+- Water candidate harvests treat Fox River and creeks as one coordinated `water-context` unit: both complete candidates must validate together and their provenance is registered atomically; neither accepted water release is replaced.
 
 ## Layout
 
@@ -32,6 +33,7 @@ kane-source-profiles.sh Official source-profile registry entry point
 kane-source-status.sh Lightweight official-source status entry point
 kane-building-candidate.sh Official building candidate harvest entry point
 kane-road-candidate.sh Official road candidate harvest entry point
+kane-water-candidate.sh Coordinated Fox River/creeks candidate harvest entry point
 seed/                 Versioned external seed identity contracts
 source-profiles/      Versioned official acquisition contracts
 run-tests.sh         Repeatable database test entry point
@@ -103,6 +105,28 @@ bash database/kane-road-candidate.sh info \
 ```
 
 The road harvester uses the approved road profile, retrieves the complete ascending object-ID inventory, requests exact bounded ID groups, validates LineString and MultiLineString geometry, and rechecks metadata plus the complete inventory after the final page. Because the approved road profile explicitly excludes missing geometry, null-geometry object IDs are preserved separately in `excluded-object-ids.json`; retained features and exclusions must together cover the complete inventory. Registration records provenance only and leaves the accepted road release and stored map features unchanged.
+
+## Coordinated water candidate harvest
+
+Harvest Fox River and creeks together into one external `water-context` candidate, validate both components offline, and register both candidate provenances atomically:
+
+```bash
+bash database/kane-water-candidate.sh harvest \
+  /root/kane-condo-data/staging
+
+bash database/kane-water-candidate.sh validate \
+  /root/kane-condo-data/staging/water/GROUP_KEY
+
+bash database/kane-water-candidate.sh register \
+  /root/kane-condo-data/database/kane-condo.gpkg \
+  /root/kane-condo-data/staging/water/GROUP_KEY
+
+bash database/kane-water-candidate.sh info \
+  /root/kane-condo-data/database/kane-condo.gpkg \
+  GROUP_KEY
+```
+
+The harvester retrieves and rechecks complete object-ID inventories for both approved water profiles, validates creek line geometry and Fox River polygon geometry, rejects missing geometry, and writes one canonical group manifest linking both candidate releases. Registration is all-or-nothing: a partial `water-context` registration is rejected, accepted Fox River and creek releases remain unchanged, and no candidate geometry is imported during Batch 020.
 
 ## Current database foundation
 

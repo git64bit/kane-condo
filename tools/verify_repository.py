@@ -34,6 +34,7 @@ REQUIRED_FILES = (
     Path("database/kane-source-status.sh"),
     Path("database/kane-building-candidate.sh"),
     Path("database/kane-road-candidate.sh"),
+    Path("database/kane-water-candidate.sh"),
     Path("database/source-profiles/README.md"),
     Path("database/source-profiles/kane-county-boundary.json"),
     Path("database/source-profiles/kane-county-buildings.json"),
@@ -58,6 +59,7 @@ REQUIRED_FILES = (
     Path("database/tests/test_source_status.py"),
     Path("database/tests/test_building_candidate.py"),
     Path("database/tests/test_road_candidate.py"),
+    Path("database/tests/test_water_candidate.py"),
     Path("database/migrations/0001_geopackage_core.sql"),
     Path("database/migrations/0002_administrative_provenance.sql"),
     Path("database/migrations/0003_county_boundary.sql"),
@@ -78,6 +80,7 @@ REQUIRED_FILES = (
     Path("database/tools/kane_source_status.py"),
     Path("database/tools/kane_building_candidate.py"),
     Path("database/tools/kane_road_candidate.py"),
+    Path("database/tools/kane_water_candidate.py"),
     Path("tools/verify_repository.py"),
 )
 
@@ -183,6 +186,7 @@ def verify_shell_entry_points(root: Path) -> int:
         root / "database/kane-source-status.sh",
         root / "database/kane-building-candidate.sh",
         root / "database/kane-road-candidate.sh",
+        root / "database/kane-water-candidate.sh",
     )
     for script in scripts:
         text = script.read_text(encoding="utf-8")

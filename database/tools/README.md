@@ -74,6 +74,25 @@ Use:
 bash database/kane-road-candidate.sh --help
 ```
 
+## Coordinated water candidate command
+
+`kane_water_candidate.py` supports:
+
+```text
+harvest   Harvest Fox River and creeks as one coordinated external candidate
+validate  Validate both staged water components and their group manifest offline
+register  Atomically register both candidate provenances without changing accepted water
+info      Trace both registered members of one water-context candidate
+```
+
+Both source profiles must belong to `water-context`. The command rejects partial group evidence or partial registration, preserves separate source identities for Fox River and creeks, and writes no candidate geometry into the accepted database.
+
+Use:
+
+```bash
+bash database/kane-water-candidate.sh --help
+```
+
 ## GeoPackage command
 
 `kane_db.py` supports:
