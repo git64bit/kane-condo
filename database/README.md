@@ -15,6 +15,7 @@ This directory contains the authoritative SQLite/GeoPackage migration workspace,
 - Road candidate harvests preserve the complete object-ID inventory, retained line geometry, and any explicitly excluded null-geometry IDs before provenance-only registration; they never replace the accepted road release.
 - Water candidate harvests treat Fox River and creeks as one coordinated `water-context` unit: both complete candidates must validate together and their provenance is registered atomically; neither accepted water release is replaced.
 - County-boundary candidate harvests use the accepted Kane County identity and boundary envelope as guards; unexpected identity, geometry, or gross bounds are rejected before provenance-only registration.
+- Candidate comparison is offline and read-only: staged evidence is revalidated, registered candidate provenance is checked, and deterministic semantic differences are reported without changing accepted data.
 
 ## Layout
 
@@ -36,6 +37,7 @@ kane-building-candidate.sh Official building candidate harvest entry point
 kane-road-candidate.sh Official road candidate harvest entry point
 kane-water-candidate.sh Coordinated Fox River/creeks candidate harvest entry point
 kane-boundary-candidate.sh County-boundary candidate harvest entry point
+kane-candidate-compare.sh Deterministic accepted-versus-candidate comparison entry point
 seed/                 Versioned external seed identity contracts
 source-profiles/      Versioned official acquisition contracts
 run-tests.sh         Repeatable database test entry point
@@ -148,6 +150,18 @@ bash database/kane-boundary-candidate.sh register \
 ```
 
 The harvester requires exactly one live object ID and the same source identity as the accepted Kane County boundary, validates Polygon or MultiPolygon geometry, and rejects gross envelope changes relative to the accepted boundary. Metadata and inventory are rechecked after the feature download. The staged manifest freezes the accepted county key, FIPS identity, accepted release hash, source identity, accepted bounds, and the deterministic gross-bounds policy so offline validation remains meaningful. Registration rechecks that accepted reference and writes only candidate provenance; it does not import candidate geometry or replace the accepted boundary.
+
+## Candidate comparison
+
+Compare any registered staged candidate with its accepted release without network access or database writes:
+
+```bash
+bash database/kane-candidate-compare.sh compare \
+  /root/kane-condo-data/database/kane-condo.gpkg \
+  /root/kane-condo-data/staging/buildings/RELEASE_KEY
+```
+
+The same command accepts a road candidate directory, the coordinated `water/GROUP_KEY` directory, or a boundary candidate directory. Every staged artifact is revalidated first. Building comparison reports added, removed, unchanged, geometry-only changes, attribute-only changes, and combined geometry/attribute changes by stable `FPId`. Roads, water, and boundary use their declared source identities, and source object-ID inventory changes are reported separately from retained-feature changes. Output is deterministic, contains a comparison SHA-256, and excludes timestamps and absolute paths.
 
 ## Current database foundation
 

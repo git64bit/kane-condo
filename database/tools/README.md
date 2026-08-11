@@ -112,6 +112,22 @@ Use:
 bash database/kane-boundary-candidate.sh --help
 ```
 
+## Candidate comparison command
+
+`kane_candidate_compare.py` supports:
+
+```text
+compare   Compare one registered staged candidate with its accepted release
+```
+
+The command is read-only and offline. It first revalidates the staged candidate, verifies that its candidate release is registered, and then compares normalized feature identity, geometry hashes, attribute hashes, and source object-ID inventory against the accepted release. Building reports contain the required added, removed, unchanged, geometry-changed, attributes-changed, and both-changed categories. Road reports separately preserve candidate null-geometry exclusions. Coordinated water reports always include both Fox River and creeks. The output contains no timestamps or machine-specific paths and includes a deterministic comparison SHA-256.
+
+Use:
+
+```bash
+bash database/kane-candidate-compare.sh --help
+```
+
 ## GeoPackage command
 
 `kane_db.py` supports:
