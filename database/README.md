@@ -12,6 +12,7 @@ This directory contains the authoritative SQLite/GeoPackage migration workspace,
 - Official source-profile validation is offline and makes no network requests.
 - Lightweight source-status checks make bounded metadata and object-ID requests only; they never download feature geometry or write the accepted database.
 - Building candidate harvests write complete validated evidence to an external staging directory before registering candidate provenance; they never replace the accepted release.
+- Road candidate harvests preserve the complete object-ID inventory, retained line geometry, and any explicitly excluded null-geometry IDs before provenance-only registration; they never replace the accepted road release.
 
 ## Layout
 
@@ -30,6 +31,7 @@ kane-seed-import.sh Verified donor seed-import entry point
 kane-source-profiles.sh Official source-profile registry entry point
 kane-source-status.sh Lightweight official-source status entry point
 kane-building-candidate.sh Official building candidate harvest entry point
+kane-road-candidate.sh Official road candidate harvest entry point
 seed/                 Versioned external seed identity contracts
 source-profiles/      Versioned official acquisition contracts
 run-tests.sh         Repeatable database test entry point
@@ -79,6 +81,28 @@ bash database/kane-building-candidate.sh info \
 ```
 
 The harvester retrieves the complete ascending object-ID inventory, requests exact bounded ID groups, validates all requested fields, requires unique `FPId` identities, normalizes Polygon and MultiPolygon geometry, rechecks metadata and the complete inventory after the final page, and writes canonical source, metadata, inventory, and manifest files. Registration is refused until the external candidate validates; it records provenance only and leaves the accepted building release, project identities, mappings, and classifications unchanged. Candidate directories and production databases remain outside Git.
+
+## Official road candidate harvest
+
+Harvest a complete road candidate into external staging, validate it offline, and register only its provenance:
+
+```bash
+bash database/kane-road-candidate.sh harvest \
+  /root/kane-condo-data/staging
+
+bash database/kane-road-candidate.sh validate \
+  /root/kane-condo-data/staging/roads/CANDIDATE_RELEASE_KEY
+
+bash database/kane-road-candidate.sh register \
+  /root/kane-condo-data/database/kane-condo.gpkg \
+  /root/kane-condo-data/staging/roads/CANDIDATE_RELEASE_KEY
+
+bash database/kane-road-candidate.sh info \
+  /root/kane-condo-data/database/kane-condo.gpkg \
+  CANDIDATE_RELEASE_KEY
+```
+
+The road harvester uses the approved road profile, retrieves the complete ascending object-ID inventory, requests exact bounded ID groups, validates LineString and MultiLineString geometry, and rechecks metadata plus the complete inventory after the final page. Because the approved road profile explicitly excludes missing geometry, null-geometry object IDs are preserved separately in `excluded-object-ids.json`; retained features and exclusions must together cover the complete inventory. Registration records provenance only and leaves the accepted road release and stored map features unchanged.
 
 ## Current database foundation
 

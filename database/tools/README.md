@@ -55,6 +55,25 @@ Use:
 bash database/kane-building-candidate.sh --help
 ```
 
+## Official road candidate command
+
+`kane_road_candidate.py` supports:
+
+```text
+harvest   Harvest a complete official-road candidate into external staging
+validate  Validate one staged road candidate without network or database writes
+register  Register validated candidate provenance without changing the accepted road release
+info      Trace one registered road candidate
+```
+
+The harvester uses the approved road profile and exact object-ID pagination. Retained geometry is normalized as LineString or MultiLineString. Null geometry is excluded only because the profile explicitly declares that policy, and every excluded object ID is preserved in canonical evidence. Registration writes candidate provenance only; it does not import candidate road geometry or modify the accepted road release.
+
+Use:
+
+```bash
+bash database/kane-road-candidate.sh --help
+```
+
 ## GeoPackage command
 
 `kane_db.py` supports:
