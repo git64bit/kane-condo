@@ -17,6 +17,7 @@ This directory contains the authoritative SQLite/GeoPackage migration workspace,
 - County-boundary candidate harvests use the accepted Kane County identity and boundary envelope as guards; unexpected identity, geometry, or gross bounds are rejected before provenance-only registration.
 - Candidate comparison is offline and read-only: staged evidence is revalidated, registered candidate provenance is checked, and deterministic semantic differences are reported without changing accepted data.
 - Building reconciliation works on an external database copy: clear one-to-one continuity is mapped automatically, additions and clear disappearances are recorded safely, ambiguous split/merge/replacement cases block promotion, and classification rows/history are preserved exactly.
+- Database promotion is prepared and fully validated outside the accepted database, records append-only authoritative promotion history, atomically replaces the active GeoPackage only after a verified rollback backup exists, and automatically restores the prior accepted release set if post-promotion verification fails.
 
 ## Layout
 
@@ -40,9 +41,47 @@ kane-water-candidate.sh Coordinated Fox River/creeks candidate harvest entry poi
 kane-boundary-candidate.sh County-boundary candidate harvest entry point
 kane-candidate-compare.sh Deterministic accepted-versus-candidate comparison entry point
 kane-building-reconcile.sh Project-identity reconciliation entry point
+kane-promotion.sh     Atomic database promotion and rollback entry point
 seed/                 Versioned external seed identity contracts
 source-profiles/      Versioned official acquisition contracts
 run-tests.sh         Repeatable database test entry point
+```
+
+## Atomic database promotion and rollback
+
+Batch 024 completes a fully reconciled refresh in a separate promotion artifact, transitions all five approved source releases together, and activates the resulting GeoPackage with an atomic file replacement:
+
+```bash
+bash database/kane-promotion.sh prepare \
+  /root/kane-condo-data/database/kane-condo.gpkg \
+  /root/kane-condo-data/staging/reconciliation/RECONCILIATION_KEY \
+  /root/kane-condo-data/staging/roads/ROAD_CANDIDATE_KEY \
+  /root/kane-condo-data/staging/water/WATER_GROUP_KEY \
+  /root/kane-condo-data/staging/boundary/BOUNDARY_CANDIDATE_KEY \
+  /root/kane-condo-data/staging
+
+bash database/kane-promotion.sh validate \
+  /root/kane-condo-data/staging/promotion/PROMOTION_KEY
+
+bash database/kane-promotion.sh promote \
+  /root/kane-condo-data/database/kane-condo.gpkg \
+  /root/kane-condo-data/staging/promotion/PROMOTION_KEY \
+  /root/kane-condo-data/rollback
+```
+
+`prepare` never changes the accepted database. It validates the reconciliation, rechecks road/water/boundary candidates and deterministic comparisons, completes candidate geometry storage in a copy, applies pending migrations there, supersedes the five previous releases, accepts the five selected candidates, and records one append-only promotion event. `promote` refuses a changed authoritative database, preserves an exact pre-promotion backup, stages the promoted GeoPackage beside the active file, and activates it with `os.replace`. Post-promotion validation checks every database subsystem and the exact accepted release set. A post-verification failure automatically restores the prior release set. Manual rollback retains the promoted database for audit and restores the prior source/project/classification state with an authoritative rollback event.
+
+Inspect promotion history or explicitly roll back with:
+
+```bash
+bash database/kane-promotion.sh history \
+  /root/kane-condo-data/database/kane-condo.gpkg
+
+bash database/kane-promotion.sh rollback \
+  /root/kane-condo-data/database/kane-condo.gpkg \
+  /root/kane-condo-data/staging/promotion/PROMOTION_KEY \
+  /root/kane-condo-data/rollback \
+  'operator rollback reason'
 ```
 
 ## Official source-profile registry

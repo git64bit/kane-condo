@@ -35,6 +35,7 @@ REQUIRED_TABLES = {
     "project_building_source_mapping",
     "building_classification_event",
     "building_classification_current",
+    "refresh_promotion_event",
     "schema_migration",
     "gpkg_spatial_ref_sys",
     "gpkg_contents",
@@ -155,6 +156,21 @@ CORE_COLUMNS = {
         ("classification", "TEXT", 1, 0),
         ("classification_event_id", "INTEGER", 1, 0),
     ),
+    "refresh_promotion_event": (
+        ("promotion_event_id", "INTEGER", 0, 1),
+        ("event_key", "TEXT", 1, 0),
+        ("promotion_key", "TEXT", 1, 0),
+        ("event_kind", "TEXT", 1, 0),
+        ("related_event_id", "INTEGER", 0, 0),
+        ("previous_database_sha256", "TEXT", 1, 0),
+        ("prepared_candidate_sha256", "TEXT", 1, 0),
+        ("promotion_plan_sha256", "TEXT", 1, 0),
+        ("reconciliation_key", "TEXT", 1, 0),
+        ("reconciliation_sha256", "TEXT", 1, 0),
+        ("authorization_kind", "TEXT", 1, 0),
+        ("details_json", "TEXT", 1, 0),
+        ("created_at", "DATETIME", 1, 0),
+    ),
     "source_map_feature": (
         ("source_map_feature_id", "INTEGER", 0, 1),
         ("source_release_id", "INTEGER", 1, 0),
@@ -263,6 +279,47 @@ def apply_migration(connection: sqlite3.Connection, migration: Migration) -> Non
     except sqlite3.Error:
         connection.rollback()
         raise
+
+
+def migrate_database(path: Path) -> None:
+    """Apply any repository migrations missing from an existing Kane Condo GeoPackage."""
+    path = path.resolve()
+    if not path.is_file():
+        raise RuntimeError(f"GeoPackage does not exist: {path}")
+    if path.suffix.lower() != ".gpkg":
+        raise RuntimeError(f"GeoPackage must use the .gpkg extension: {path}")
+    with path.open("rb") as handle:
+        if handle.read(16) != b"SQLite format 3\x00":
+            raise RuntimeError("File header is not SQLite format 3")
+    expected = discover_migrations()
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON")
+        application_id = connection.execute("PRAGMA application_id").fetchone()[0]
+        if application_id != GPKG_APPLICATION_ID:
+            raise RuntimeError(
+                f"Unexpected application_id: expected {GPKG_APPLICATION_ID}, found {application_id}"
+            )
+        rows = connection.execute(
+            "SELECT migration_id, filename, sha256 FROM schema_migration ORDER BY migration_id"
+        ).fetchall()
+        actual = [(int(row[0]), str(row[1]), str(row[2])) for row in rows]
+        expected_ids = [
+            (item.migration_id, item.filename, item.sha256) for item in expected
+        ]
+        if actual != expected_ids[: len(actual)]:
+            raise RuntimeError(
+                "Applied migration identity is not an exact prefix of repository migrations"
+            )
+        for migration in expected[len(actual):]:
+            apply_migration(connection, migration)
+    finally:
+        connection.close()
+    errors = validate_database(path)
+    if errors:
+        raise RuntimeError(
+            "GeoPackage failed validation after migration:\n- " + "\n- ".join(errors)
+        )
 
 
 def initialize_database(output: Path) -> None:
@@ -468,6 +525,7 @@ def validate_core_schema(connection: sqlite3.Connection) -> list[str]:
             ("project_building_source_mapping", "Kane Condo building mappings"),
             ("building_classification_event", "Kane Condo classification history"),
             ("building_classification_current", "Kane Condo current classifications"),
+            ("refresh_promotion_event", "Kane Condo refresh promotion history"),
         ):
             project_content = connection.execute(
                 "SELECT data_type, identifier, srs_id, last_change FROM gpkg_contents "
@@ -578,6 +636,9 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser = subparsers.add_parser("init", help="create a new migrated GeoPackage")
     init_parser.add_argument("output", type=Path)
 
+    migrate_parser = subparsers.add_parser("migrate", help="apply pending repository migrations")
+    migrate_parser.add_argument("database", type=Path)
+
     validate_parser = subparsers.add_parser("validate", help="validate a GeoPackage")
     validate_parser.add_argument("database", type=Path)
 
@@ -592,6 +653,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "init":
             initialize_database(args.output)
             result = database_info(args.output)
+        elif args.command == "migrate":
+            migrate_database(args.database)
+            result = database_info(args.database)
         elif args.command == "validate":
             errors = validate_database(args.database)
             result = {

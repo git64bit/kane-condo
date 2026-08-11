@@ -648,6 +648,37 @@ def _apply_plan(candidate_database: Path, candidate_dir: Path, plan: Mapping[str
         connection.close()
 
 
+def _validate_candidate_database_with_current_migrations(database: Path) -> list[str]:
+    """Validate an immutable reconciliation DB even when the repository gained migrations later."""
+    errors = list(kane_classifications.validate_database(database))
+    if not errors:
+        return []
+    try:
+        connection = sqlite3.connect(f"file:{database.resolve()}?mode=ro", uri=True)
+        rows = connection.execute(
+            "SELECT migration_id, filename, sha256 FROM schema_migration ORDER BY migration_id"
+        ).fetchall()
+    except sqlite3.Error:
+        return errors
+    finally:
+        try:
+            connection.close()
+        except UnboundLocalError:
+            pass
+    expected = [
+        (item.migration_id, item.filename, item.sha256)
+        for item in kane_db.discover_migrations()
+    ]
+    actual = [(int(row[0]), str(row[1]), str(row[2])) for row in rows]
+    if actual != expected[: len(actual)] or len(actual) >= len(expected):
+        return errors
+    with tempfile.TemporaryDirectory(prefix="kane-reconcile-validate-") as temp_root:
+        migrated = Path(temp_root) / DATABASE_FILENAME
+        shutil.copyfile(database, migrated)
+        kane_db.migrate_database(migrated)
+        return list(kane_classifications.validate_database(migrated))
+
+
 def _candidate_mapping_summary(database: Path, release_key: str) -> dict[str, Any]:
     connection = _read_only(database)
     try:
@@ -784,7 +815,7 @@ def validate_reconciliation(reconciliation_dir: Path) -> dict[str, Any]:
     database = reconciliation_dir / DATABASE_FILENAME
     if database.stat().st_size != database_info["byte_length"] or sha256_file(database) != database_info["sha256"]:
         raise RuntimeError("Candidate database file identity does not match reconciliation report")
-    errors = kane_classifications.validate_database(database)
+    errors = _validate_candidate_database_with_current_migrations(database)
     if errors:
         raise RuntimeError("Reconciled candidate database is invalid:\n- " + "\n- ".join(errors))
     accepted_report = _mapping(report["accepted_release"], "accepted_release")

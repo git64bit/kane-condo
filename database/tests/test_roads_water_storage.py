@@ -248,7 +248,7 @@ class RoadsWaterStorageTests(unittest.TestCase):
                 ).fetchone(),
             )
             self.assertEqual(
-                7, connection.execute("SELECT COUNT(*) FROM schema_migration").fetchone()[0]
+                8, connection.execute("SELECT COUNT(*) FROM schema_migration").fetchone()[0]
             )
         finally:
             connection.close()

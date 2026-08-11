@@ -182,7 +182,7 @@ class ClassificationHistoryTests(unittest.TestCase):
                 classifications.table_columns(connection, classifications.CURRENT_TABLE),
             )
             self.assertEqual(
-                7,
+                8,
                 connection.execute("SELECT COUNT(*) FROM schema_migration").fetchone()[0],
             )
             self.assertEqual(

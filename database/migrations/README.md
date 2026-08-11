@@ -18,6 +18,7 @@ Current migrations:
 0005_official_building_storage.sql
 0006_project_building_identity.sql
 0007_classification_history.sql
+0008_refresh_promotion.sql
 ```
 
 Rules:
@@ -46,5 +47,7 @@ Rules:
 `0006_project_building_identity.sql` adds project-owned building identities and many-to-many official-footprint mappings while enforcing deterministic one-to-one initial origins.
 
 `0007_classification_history.sql` adds explicit current building classifications, append-only classification events, idempotent event keys, correction chains, and undo relationships. Missing current rows mean Unclassified.
+
+`0008_refresh_promotion.sql` adds append-only authoritative refresh-promotion and rollback events. Promotion history records the prior database identity, prepared candidate identity, deterministic promotion plan, reconciliation identity, explicit authorization, and rollback relation without making source geometry or project classifications mutable.
 
 Migration files are part of the database identity. Changing an accepted migration causes validation to fail rather than silently rewriting history.

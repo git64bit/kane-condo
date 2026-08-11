@@ -146,12 +146,34 @@ Use:
 bash database/kane-building-reconcile.sh --help
 ```
 
+## Atomic promotion command
+
+`kane_promotion.py` supports:
+
+```text
+prepare   Build and fully validate a five-source promoted candidate database
+validate  Validate a promotion artifact and its authoritative promotion event
+info      Inspect promotion evidence and release transitions
+promote   Preserve rollback state and atomically activate the promoted database
+rollback  Atomically restore the prior accepted release set and record rollback
+history   Inspect append-only authoritative promotion/rollback events
+```
+
+Promotion preparation is external and read-only with respect to the accepted database. Activation requires the accepted database SHA-256 to still match the state used by reconciliation, writes an exact rollback backup first, and uses an atomic same-directory file replacement. Post-promotion failure invokes rollback automatically. Promotion and rollback history is stored in the authoritative database as append-only events.
+
+Use:
+
+```bash
+bash database/kane-promotion.sh --help
+```
+
 ## GeoPackage command
 
 `kane_db.py` supports:
 
 ```text
 init      Create a new GeoPackage and apply every migration
+migrate   Apply repository migrations missing from an existing Kane Condo GeoPackage
 validate  Validate the GeoPackage header, schema, integrity, and migration identity
 info      Report the database and migration identity as JSON
 ```
