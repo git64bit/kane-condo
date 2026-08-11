@@ -16,6 +16,7 @@ This directory contains the authoritative SQLite/GeoPackage migration workspace,
 - Water candidate harvests treat Fox River and creeks as one coordinated `water-context` unit: both complete candidates must validate together and their provenance is registered atomically; neither accepted water release is replaced.
 - County-boundary candidate harvests use the accepted Kane County identity and boundary envelope as guards; unexpected identity, geometry, or gross bounds are rejected before provenance-only registration.
 - Candidate comparison is offline and read-only: staged evidence is revalidated, registered candidate provenance is checked, and deterministic semantic differences are reported without changing accepted data.
+- Building reconciliation works on an external database copy: clear one-to-one continuity is mapped automatically, additions and clear disappearances are recorded safely, ambiguous split/merge/replacement cases block promotion, and classification rows/history are preserved exactly.
 
 ## Layout
 
@@ -38,6 +39,7 @@ kane-road-candidate.sh Official road candidate harvest entry point
 kane-water-candidate.sh Coordinated Fox River/creeks candidate harvest entry point
 kane-boundary-candidate.sh County-boundary candidate harvest entry point
 kane-candidate-compare.sh Deterministic accepted-versus-candidate comparison entry point
+kane-building-reconcile.sh Project-identity reconciliation entry point
 seed/                 Versioned external seed identity contracts
 source-profiles/      Versioned official acquisition contracts
 run-tests.sh         Repeatable database test entry point
@@ -162,6 +164,25 @@ bash database/kane-candidate-compare.sh compare \
 ```
 
 The same command accepts a road candidate directory, the coordinated `water/GROUP_KEY` directory, or a boundary candidate directory. Every staged artifact is revalidated first. Building comparison reports added, removed, unchanged, geometry-only changes, attribute-only changes, and combined geometry/attribute changes by stable `FPId`. Roads, water, and boundary use their declared source identities, and source object-ID inventory changes are reported separately from retained-feature changes. Output is deterministic, contains a comparison SHA-256, and excludes timestamps and absolute paths.
+
+## Building project-identity reconciliation
+
+Build an external candidate database whose official building candidate is mapped to Kane Condo project identities:
+
+```bash
+bash database/kane-building-reconcile.sh prepare \
+  /root/kane-condo-data/database/kane-condo.gpkg \
+  /root/kane-condo-data/staging/buildings/RELEASE_KEY \
+  /root/kane-condo-data/staging
+
+bash database/kane-building-reconcile.sh validate \
+  /root/kane-condo-data/staging/reconciliation/RECONCILIATION_KEY
+
+bash database/kane-building-reconcile.sh info \
+  /root/kane-condo-data/staging/reconciliation/RECONCILIATION_KEY
+```
+
+`prepare` never changes the accepted database. It revalidates the registered building candidate and deterministic comparison, copies the accepted database, imports candidate footprints only into that copy, and applies clear mappings there. Stable `FPId` continuity and exact-geometry renumbering preserve existing project identities automatically; clear additions receive deterministic new project identities; clear disappearances make the existing project identity inactive without deleting its classification history. Overlapping uncertain replacements, splits, merges, and complex cases remain unmapped and are reported as explicit ambiguities. A reconciliation is promotion-ready only when no ambiguity remains and every candidate footprint has a confirmed project mapping. Classification current rows and append-only history must be byte-semantic equivalents before and after reconciliation.
 
 ## Current database foundation
 

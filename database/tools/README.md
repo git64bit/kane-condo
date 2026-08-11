@@ -128,6 +128,24 @@ Use:
 bash database/kane-candidate-compare.sh --help
 ```
 
+## Building project-identity reconciliation command
+
+`kane_building_reconcile.py` supports:
+
+```text
+prepare   Build an external reconciled candidate database from a registered building candidate
+validate  Validate one reconciliation artifact and its candidate database offline
+info      Report automatic mappings, ambiguities, classification preservation, and readiness
+```
+
+The command never mutates the accepted database. It copies that database, imports the candidate building release into the copy, preserves existing Kane Condo identities for clear continuity/replacement cases, creates deterministic identities only for clear additions, marks clear disappearances inactive, and leaves ambiguous split/merge/replacement candidates unmapped. Classification current state and append-only history must remain unchanged. Promotion readiness requires zero ambiguities and complete confirmed mapping coverage for the candidate release.
+
+Use:
+
+```bash
+bash database/kane-building-reconcile.sh --help
+```
+
 ## GeoPackage command
 
 `kane_db.py` supports:
