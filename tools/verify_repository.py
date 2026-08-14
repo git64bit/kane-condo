@@ -20,6 +20,7 @@ REQUIRED_FILES = (
     Path("docs/RUNTIME_TOPOLOGY.md"),
     Path("docs/SALVAGE_MANIFEST.md"),
     Path("docs/V1_SCOPE.md"),
+    Path("docs/RENDER_FORMAT_DECISION.md"),
     Path("database/README.md"),
     Path("database/run-tests.sh"),
     Path("database/kane-db.sh"),
@@ -94,6 +95,11 @@ REQUIRED_FILES = (
     Path("database/tools/kane_candidate_compare.py"),
     Path("database/tools/kane_building_reconcile.py"),
     Path("database/tools/kane_promotion.py"),
+    Path("render/README.md"),
+    Path("render/kane-render-benchmark.sh"),
+    Path("render/run-tests.sh"),
+    Path("render/tools/kane_render_benchmark.py"),
+    Path("render/tests/test_render_benchmark.py"),
     Path("tools/verify_repository.py"),
 )
 
@@ -204,6 +210,8 @@ def verify_shell_entry_points(root: Path) -> int:
         root / "database/kane-candidate-compare.sh",
         root / "database/kane-building-reconcile.sh",
         root / "database/kane-promotion.sh",
+        root / "render/kane-render-benchmark.sh",
+        root / "render/run-tests.sh",
     )
     for script in scripts:
         text = script.read_text(encoding="utf-8")
