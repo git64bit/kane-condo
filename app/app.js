@@ -35,6 +35,15 @@ const WATER_CREEK_FRACTIONS = [0, 0.60, 1];
 const WATER_CONTEXT_ZOOM = 4;
 const WATER_DETAIL_ZOOM = 16;
 
+const BUILDING_MAGIC = "KCBD030\n";
+const BUILDING_FORMAT = "kane-condo-building-lod";
+const BUILDING_VERSION = 1;
+const BUILDING_SRS_ID = 4326;
+const BUILDING_LEVEL_KEYS = ["context", "neighborhood", "editing"];
+const BUILDING_AREA_FRACTIONS = [0.35, 1, 1];
+const BUILDING_NEIGHBORHOOD_ZOOM = 8;
+const BUILDING_EDITING_ZOOM = 32;
+
 function fail(code, message, detail = null) {
   throw new PackageValidationError(code, message, detail);
 }
@@ -49,6 +58,10 @@ function roadFail(message, detail = null) {
 
 function waterFail(message, detail = null) {
   fail("WATER_INCOMPATIBLE", message, detail);
+}
+
+function buildingFail(message, detail = null) {
+  fail("BUILDING_INCOMPATIBLE", message, detail);
 }
 
 function isPlainObject(value) {
@@ -730,6 +743,228 @@ function createWaterLayerController(ui, container, homeViewBox, onLevelChange = 
 }
 // End Batch 038 water.
 
+
+// Batch 039 buildings: project-identity KRF records, neutral rendering, browser memory only.
+function requireBuildingBounds(bounds, label) {
+  if (!Array.isArray(bounds) || bounds.length !== 4) buildingFail(`${label} bounds are invalid.`);
+  const values = bounds.map((value, index) => finiteNumber(value, `${label} bound ${index}`, buildingFail));
+  if (values[2] < values[0] || values[3] < values[1]) buildingFail(`${label} bounds are inverted.`);
+  return values;
+}
+
+function validateBuildingIndex(index, manifest, payloadLength) {
+  exactKeys(index, ["building_bounds", "chunk_feature_limit", "format", "identity", "levels", "selection", "source", "srs_id", "version"], "Building KRF index", buildingFail);
+  if (index.format !== BUILDING_FORMAT || index.version !== BUILDING_VERSION) buildingFail(`Unsupported building KRF ${String(index.format)} version ${String(index.version)}.`);
+  if (index.srs_id !== BUILDING_SRS_ID) buildingFail(`Building KRF SRS ${String(index.srs_id)} is unsupported.`);
+  if (!Number.isSafeInteger(index.chunk_feature_limit) || index.chunk_feature_limit < 1) buildingFail("Building KRF chunk feature limit is invalid.");
+  requireBuildingBounds(index.building_bounds, "Building KRF");
+
+  const identity = exactKeys(index.identity, ["field", "kind", "note"], "Building KRF identity", buildingFail);
+  if (identity.field !== "building_key" || identity.kind !== "kane-condo-project-building" || typeof identity.note !== "string") buildingFail("Building KRF project identity contract is incompatible.");
+  const selection = exactKeys(index.selection, ["basis", "coordinate_score_scale", "note"], "Building KRF selection", buildingFail);
+  if (selection.basis !== "deterministic-footprint-coordinate-area-score") buildingFail("Building KRF selection basis is incompatible.");
+  if (!Number.isSafeInteger(selection.coordinate_score_scale) || selection.coordinate_score_scale < 1 || typeof selection.note !== "string") buildingFail("Building KRF selection metadata is invalid.");
+
+  const source = exactKeys(index.source, ["county", "dataset_key", "feature_count", "release_content_sha256", "release_key"], "Building KRF source", buildingFail);
+  if (source.dataset_key !== "buildings") buildingFail("Building KRF source dataset is not buildings.");
+  if (!Number.isSafeInteger(source.feature_count) || source.feature_count < 1) buildingFail("Building KRF source feature count is invalid.");
+  const county = exactKeys(source.county, ["county_key", "fips_code", "name", "state_code"], "Building KRF county", buildingFail);
+  const manifestCounty = manifest?.database?.county;
+  for (const key of Object.keys(EXPECTED_COUNTY)) {
+    if (county[key] !== EXPECTED_COUNTY[key] || county[key] !== manifestCounty?.[key]) buildingFail(`Building KRF county ${key} does not match the validated package.`);
+  }
+  const accepted = manifest?.database?.accepted_releases?.buildings;
+  if (!isPlainObject(accepted) || source.release_key !== accepted.release_key || source.release_content_sha256 !== accepted.release_content_sha256 || source.feature_count !== accepted.feature_count) buildingFail("Building KRF release does not match the validated package manifest.");
+
+  if (!Array.isArray(index.levels) || index.levels.length !== BUILDING_LEVEL_KEYS.length) buildingFail("Building KRF must contain exactly three LOD levels.");
+  let expectedOffset = 0;
+  let previousCount = 0;
+  for (let levelIndex = 0; levelIndex < BUILDING_LEVEL_KEYS.length; levelIndex += 1) {
+    const level = exactKeys(index.levels[levelIndex], ["chunks", "cumulative_area_fraction", "feature_count", "key", "purpose", "rank", "simplification_tolerance_degrees", "source_vertex_count", "vertex_count"], `Building KRF level ${levelIndex}`, buildingFail);
+    if (level.key !== BUILDING_LEVEL_KEYS[levelIndex] || level.rank !== levelIndex) buildingFail("Building KRF LOD order/rank is incompatible.");
+    if (level.cumulative_area_fraction !== BUILDING_AREA_FRACTIONS[levelIndex]) buildingFail(`Building KRF level ${level.key} area fraction is incompatible.`);
+    if (!Number.isSafeInteger(level.feature_count) || level.feature_count < 1 || level.feature_count < previousCount || level.feature_count > source.feature_count) buildingFail(`Building KRF level ${level.key} feature count is invalid or non-monotonic.`);
+    previousCount = level.feature_count;
+    if (!Number.isSafeInteger(level.source_vertex_count) || !Number.isSafeInteger(level.vertex_count) || level.source_vertex_count < level.feature_count || level.vertex_count < level.feature_count || level.vertex_count > level.source_vertex_count) buildingFail(`Building KRF level ${level.key} vertex counts are invalid.`);
+    const tolerance = finiteNumber(level.simplification_tolerance_degrees, `Building KRF level ${level.key} simplification tolerance`, buildingFail);
+    if (tolerance < 0 || (levelIndex < 2 && !(tolerance > 0)) || (levelIndex === 2 && tolerance !== 0)) buildingFail(`Building KRF level ${level.key} simplification tolerance is incompatible.`);
+    if (levelIndex === 2 && level.vertex_count !== level.source_vertex_count) buildingFail("Building KRF editing level does not preserve exact source vertex count.");
+    if (!Array.isArray(level.chunks) || level.chunks.length < 1) buildingFail(`Building KRF level ${level.key} has no chunks.`);
+    let chunkFeatures = 0;
+    for (const chunk of level.chunks) {
+      exactKeys(chunk, ["bounds", "feature_count", "length", "offset", "payload_sha256", "records_sha256", "uncompressed_length"], `Building KRF ${level.key} chunk`, buildingFail);
+      requireBuildingBounds(chunk.bounds, `Building KRF ${level.key} chunk`);
+      if (![chunk.feature_count, chunk.length, chunk.offset, chunk.uncompressed_length].every(Number.isSafeInteger)) buildingFail(`Building KRF ${level.key} chunk integer fields are invalid.`);
+      if (chunk.feature_count < 1 || chunk.feature_count > index.chunk_feature_limit || chunk.length < 1 || chunk.uncompressed_length < 1 || chunk.offset !== expectedOffset) buildingFail(`Building KRF ${level.key} chunk framing is invalid.`);
+      if (!/^[0-9a-f]{64}$/.test(chunk.payload_sha256) || !/^[0-9a-f]{64}$/.test(chunk.records_sha256)) buildingFail(`Building KRF ${level.key} chunk hashes are invalid.`);
+      expectedOffset += chunk.length;
+      chunkFeatures += chunk.feature_count;
+    }
+    if (chunkFeatures !== level.feature_count) buildingFail(`Building KRF level ${level.key} chunk feature count does not match its level count.`);
+  }
+  if (index.levels[1].feature_count !== source.feature_count) buildingFail("Building KRF neighborhood level is not the complete accepted building set.");
+  if (index.levels[2].feature_count !== source.feature_count) buildingFail("Building KRF editing level is not the complete accepted building set.");
+  if (expectedOffset !== payloadLength) buildingFail("Building KRF payload length does not match the chunk inventory.");
+  return index;
+}
+
+export function parseBuildingContainer(bytes, manifest) {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (data.byteLength < BUILDING_MAGIC.length + 8) buildingFail("Building KRF is truncated before its index.");
+  const magic = new TextDecoder("ascii", { fatal: true }).decode(data.slice(0, BUILDING_MAGIC.length));
+  if (magic !== BUILDING_MAGIC) buildingFail("Building KRF magic header is invalid.");
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const indexLength = readUint64BigEndian(view, BUILDING_MAGIC.length, buildingFail, "Building KRF");
+  const indexStart = BUILDING_MAGIC.length + 8;
+  const indexEnd = indexStart + indexLength;
+  if (indexEnd > data.byteLength) buildingFail("Building KRF index is truncated.");
+  let indexText;
+  let index;
+  try {
+    indexText = new TextDecoder("utf-8", { fatal: true }).decode(data.slice(indexStart, indexEnd));
+    index = JSON.parse(indexText);
+  } catch (error) {
+    buildingFail("Building KRF index is not valid UTF-8 JSON.", String(error));
+  }
+  if (indexText !== canonicalize(index)) buildingFail("Building KRF index is not canonical JSON.");
+  const payload = data.slice(indexEnd);
+  validateBuildingIndex(index, manifest, payload.byteLength);
+  return { index, payload };
+}
+
+async function inflateBuildingZlib(compressed) {
+  if (typeof DecompressionStream !== "function") fail("BUILDING_DECOMPRESSION_UNAVAILABLE", "This browser does not provide deflate decompression required by the building package.");
+  try {
+    const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  } catch (error) {
+    fail("BUILDING_DECOMPRESSION_FAILED", "A building KRF chunk could not be decompressed.", String(error));
+  }
+}
+
+function validateBuildingPosition(point, label) {
+  if (!Array.isArray(point) || point.length !== 2 || point.some((value) => typeof value !== "number" || !Number.isFinite(value))) buildingFail(`${label} contains an invalid coordinate.`);
+}
+
+function validateBuildingRing(ring, label) {
+  if (!Array.isArray(ring) || ring.length < 4) buildingFail(`${label} contains a polygon ring with fewer than four points.`);
+  for (const point of ring) validateBuildingPosition(point, label);
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) buildingFail(`${label} contains an open polygon ring.`);
+  const distinct = new Set(ring.slice(0, -1).map((point) => `${point[0]}\u0000${point[1]}`));
+  if (distinct.size < 3) buildingFail(`${label} contains a polygon ring with fewer than three distinct vertices.`);
+}
+
+function validateBuildingRecord(record, label) {
+  exactKeys(record, ["bounds", "building_key", "coordinates", "geometry_type", "source_feature_id"], label, buildingFail);
+  requireBuildingBounds(record.bounds, label);
+  if (typeof record.building_key !== "string" || record.building_key.length === 0) buildingFail(`${label} project building identity is invalid.`);
+  if (typeof record.source_feature_id !== "string" || record.source_feature_id.length === 0) buildingFail(`${label} source identity is invalid.`);
+  if (record.geometry_type !== "Polygon" && record.geometry_type !== "MultiPolygon") buildingFail(`${label} geometry type is unsupported.`);
+  const polygons = record.geometry_type === "Polygon" ? [record.coordinates] : record.coordinates;
+  if (!Array.isArray(polygons) || polygons.length < 1) buildingFail(`${label} contains no polygon coordinates.`);
+  for (const polygon of polygons) {
+    if (!Array.isArray(polygon) || polygon.length < 1) buildingFail(`${label} contains an empty polygon.`);
+    for (const ring of polygon) validateBuildingRing(ring, label);
+  }
+  return record;
+}
+
+export async function decodeBuildingLevel(container, levelKey) {
+  if (!BUILDING_LEVEL_KEYS.includes(levelKey)) buildingFail(`Unknown building LOD level ${String(levelKey)}.`);
+  const level = container.index.levels.find((candidate) => candidate.key === levelKey);
+  if (!level) buildingFail(`Building KRF does not contain level ${levelKey}.`);
+  const records = [];
+  const buildingKeys = new Set();
+  const sourceIds = new Set();
+  for (const [chunkIndex, chunk] of level.chunks.entries()) {
+    const compressed = container.payload.slice(chunk.offset, chunk.offset + chunk.length);
+    if (await sha256Bytes(compressed) !== chunk.payload_sha256) buildingFail(`Building KRF ${levelKey} chunk ${chunkIndex} compressed hash is invalid.`);
+    const raw = await inflateBuildingZlib(compressed);
+    if (raw.byteLength !== chunk.uncompressed_length) buildingFail(`Building KRF ${levelKey} chunk ${chunkIndex} decompressed length is invalid.`);
+    if (await sha256Bytes(raw) !== chunk.records_sha256) buildingFail(`Building KRF ${levelKey} chunk ${chunkIndex} record hash is invalid.`);
+    let text;
+    let chunkRecords;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(raw);
+      chunkRecords = JSON.parse(text);
+    } catch (error) {
+      buildingFail(`Building KRF ${levelKey} chunk ${chunkIndex} records are invalid JSON.`, String(error));
+    }
+    if (text !== canonicalize(chunkRecords)) buildingFail(`Building KRF ${levelKey} chunk ${chunkIndex} records are not canonical JSON.`);
+    if (!Array.isArray(chunkRecords) || chunkRecords.length !== chunk.feature_count) buildingFail(`Building KRF ${levelKey} chunk ${chunkIndex} feature count is invalid.`);
+    for (let recordIndex = 0; recordIndex < chunkRecords.length; recordIndex += 1) {
+      const record = validateBuildingRecord(chunkRecords[recordIndex], `Building ${levelKey} record ${records.length + recordIndex}`);
+      if (buildingKeys.has(record.building_key)) buildingFail(`Building KRF level ${levelKey} contains duplicate building_key ${record.building_key}.`);
+      if (sourceIds.has(record.source_feature_id)) buildingFail(`Building KRF level ${levelKey} contains duplicate source identity ${record.source_feature_id}.`);
+      buildingKeys.add(record.building_key);
+      sourceIds.add(record.source_feature_id);
+    }
+    records.push(...chunkRecords);
+  }
+  if (records.length !== level.feature_count) buildingFail(`Building KRF level ${levelKey} decoded feature count is invalid.`);
+  return records;
+}
+
+export function buildingPathData(records) {
+  const paths = [];
+  for (const record of records) {
+    const polygons = record.geometry_type === "Polygon" ? [record.coordinates] : record.coordinates;
+    for (const polygon of polygons) for (const ring of polygon) paths.push(ringPathData(ring));
+  }
+  return paths.join(" ");
+}
+
+export function buildingLevelForViewBox(viewBox, homeViewBox) {
+  validateViewBox(viewBox); validateViewBox(homeViewBox);
+  const zoom = homeViewBox[2] / viewBox[2];
+  if (zoom >= BUILDING_EDITING_ZOOM) return "editing";
+  if (zoom >= BUILDING_NEIGHBORHOOD_ZOOM) return "neighborhood";
+  return "context";
+}
+
+function createBuildingLayerController(ui, container, homeViewBox, onLevelChange = () => {}) {
+  const cache = new Map();
+  const pending = new Map();
+  let visibleLevel = null;
+  let visibleRecords = [];
+  let wantedLevel = null;
+  let requestSerial = 0;
+
+  const loadLevel = (levelKey) => {
+    if (cache.has(levelKey)) return Promise.resolve(cache.get(levelKey));
+    if (pending.has(levelKey)) return pending.get(levelKey);
+    const work = decodeBuildingLevel(container, levelKey).then((records) => {
+      const decoded = { records, pathData: buildingPathData(records) };
+      cache.set(levelKey, decoded);
+      pending.delete(levelKey);
+      return decoded;
+    }, (error) => {
+      pending.delete(levelKey);
+      throw error;
+    });
+    pending.set(levelKey, work);
+    return work;
+  };
+
+  const request = async (viewBox) => {
+    const levelKey = buildingLevelForViewBox(viewBox, homeViewBox);
+    wantedLevel = levelKey;
+    if (visibleLevel === levelKey) return;
+    const serial = ++requestSerial;
+    const decoded = await loadLevel(levelKey);
+    if (serial !== requestSerial || wantedLevel !== levelKey) return;
+    ui.buildingPath.setAttribute("d", decoded.pathData);
+    ui.buildingPath.dataset.level = levelKey;
+    visibleRecords = decoded.records;
+    visibleLevel = levelKey;
+    onLevelChange(levelKey);
+  };
+  return { request, getVisibleLevel: () => visibleLevel, getVisibleRecords: () => [...visibleRecords] };
+}
+// End Batch 039 buildings.
+
 async function loadConfig() {
   let response;
   try { response = await fetch("/config.json", { cache: "no-store" }); }
@@ -762,7 +997,7 @@ function getUi(doc) {
   return {
     indicator: doc.querySelector("#status-indicator"), title: doc.querySelector("#status-title"), message: doc.querySelector("#status-message"),
     details: doc.querySelector("#package-details"), detailCounty: doc.querySelector("#detail-county"), detailCreated: doc.querySelector("#detail-created"), detailIdentity: doc.querySelector("#detail-identity"),
-    errorDetail: doc.querySelector("#error-detail"), mapPanel: doc.querySelector("#map-panel"), mapCanvas: doc.querySelector("#map-canvas"), countyPath: doc.querySelector("#county-outline"), waterPolygons: doc.querySelector("#water-polygons"), waterLines: doc.querySelector("#water-lines"), roadPath: doc.querySelector("#road-network"), mapCaption: doc.querySelector("#map-caption"), resetView: doc.querySelector("#reset-county-view"),
+    errorDetail: doc.querySelector("#error-detail"), mapPanel: doc.querySelector("#map-panel"), mapCanvas: doc.querySelector("#map-canvas"), countyPath: doc.querySelector("#county-outline"), waterPolygons: doc.querySelector("#water-polygons"), waterLines: doc.querySelector("#water-lines"), buildingPath: doc.querySelector("#building-footprints"), roadPath: doc.querySelector("#road-network"), mapCaption: doc.querySelector("#map-caption"), resetView: doc.querySelector("#reset-county-view"),
   };
 }
 
@@ -779,7 +1014,7 @@ function renderCountyOverview(ui, overview) {
   applyViewBox(ui.mapCanvas, viewBox);
   ui.mapCanvas.setAttribute("preserveAspectRatio", "xMidYMid meet");
   ui.countyPath.setAttribute("d", overviewPathData(overview.outline.rings));
-  ui.mapCaption.textContent = "Loading county road and water overview layers";
+  ui.mapCaption.textContent = "Loading county road, water, and building context layers";
   ui.mapPanel.hidden = false;
   return viewBox;
 }
@@ -791,15 +1026,18 @@ async function start(doc = document) {
     const config = await loadConfig();
     let roadsBytes = null;
     let waterBytes = null;
+    let buildingsBytes = null;
     const manifest = await validateLocalPackage(config, {
       onProgress(progress) { setStatus(ui, "checking", "Checking local package", progress.message); },
       onComponent(component, bytes) {
         if (component.role === "roads") roadsBytes = bytes;
         if (component.role === "water") waterBytes = bytes;
+        if (component.role === "buildings") buildingsBytes = bytes;
       },
     });
     if (!roadsBytes) fail("ROAD_INCOMPATIBLE", "Validated package did not expose its road component bytes.");
     if (!waterBytes) fail("WATER_INCOMPATIBLE", "Validated package did not expose its water component bytes.");
+    if (!buildingsBytes) fail("BUILDING_INCOMPATIBLE", "Validated package did not expose its building component bytes.");
     const county = manifest.database.county;
     ui.detailCounty.textContent = `${county.name}, ${county.state_code}`;
     ui.detailCreated.textContent = manifest.created_at;
@@ -810,24 +1048,28 @@ async function start(doc = document) {
     const overview = await loadCountyOverview(config, manifest);
     const homeViewBox = renderCountyOverview(ui, overview);
 
-    setStatus(ui, "checking", "Opening Kane County", "Decoding county road and water overview layers.");
+    setStatus(ui, "checking", "Opening Kane County", "Decoding county road, water, and building context layers.");
     const roadContainer = parseRoadContainer(roadsBytes, manifest);
     const waterContainer = parseWaterContainer(waterBytes, manifest);
-    const visibleLevels = { road: null, water: null };
+    const buildingContainer = parseBuildingContainer(buildingsBytes, manifest);
+    const visibleLevels = { road: null, water: null, building: null };
     const updateCaption = () => {
       const road = visibleLevels.road ?? "loading";
       const water = visibleLevels.water ?? "loading";
-      ui.mapCaption.textContent = `Road detail: ${road} • Water detail: ${water} • drag to pan • wheel or trackpad to zoom`;
+      const building = visibleLevels.building ?? "loading";
+      ui.mapCaption.textContent = `Road detail: ${road} • Water detail: ${water} • Building detail: ${building} • drag to pan • wheel or trackpad to zoom`;
     };
     const roads = createRoadLayerController(ui, roadContainer, homeViewBox, (level) => { visibleLevels.road = level; updateCaption(); });
     const water = createWaterLayerController(ui, waterContainer, homeViewBox, (level) => { visibleLevels.water = level; updateCaption(); });
-    await Promise.all([roads.request(homeViewBox), water.request(homeViewBox)]);
+    const buildings = createBuildingLayerController(ui, buildingContainer, homeViewBox, (level) => { visibleLevels.building = level; updateCaption(); });
+    await Promise.all([roads.request(homeViewBox), water.request(homeViewBox), buildings.request(homeViewBox)]);
     installMapNavigation(ui, homeViewBox, (viewBox) => {
       roads.request(viewBox).catch((error) => showError(ui, error));
       water.request(viewBox).catch((error) => showError(ui, error));
+      buildings.request(viewBox).catch((error) => showError(ui, error));
     });
 
-    setStatus(ui, "ready", "Kane County ready", "Continuous navigation with progressive local road and water rendering is available without data writes.");
+    setStatus(ui, "ready", "Kane County ready", "Continuous navigation with progressive local road, water, and neutral building rendering is available without data writes.");
     doc.documentElement.dataset.packageState = "ready";
   } catch (error) { showError(ui, error); }
 }
