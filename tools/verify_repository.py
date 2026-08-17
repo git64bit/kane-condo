@@ -128,6 +128,15 @@ REQUIRED_FILES = (
     Path("render/tests/test_package_manifest.py"),
     Path("render/tests/test_render_package.py"),
     Path("render/tests/test_render_benchmark.py"),
+    Path("app/README.md"),
+    Path("app/index.html"),
+    Path("app/app.css"),
+    Path("app/app.js"),
+    Path("app/package-validator.js"),
+    Path("app/kane-local.sh"),
+    Path("app/run-tests.sh"),
+    Path("app/tools/kane_local_server.py"),
+    Path("app/tests/test_local_server.py"),
     Path("tools/verify_repository.py"),
 )
 
@@ -247,6 +256,8 @@ def verify_shell_entry_points(root: Path) -> int:
         root / "render/kane-render-package.sh",
         root / "render/kane-render-benchmark.sh",
         root / "render/run-tests.sh",
+        root / "app/kane-local.sh",
+        root / "app/run-tests.sh",
     )
     for script in scripts:
         text = script.read_text(encoding="utf-8")

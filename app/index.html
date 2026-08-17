@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kane Condo</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <main class="shell" aria-labelledby="app-title">
+    <header class="shell__header">
+      <div>
+        <p class="eyebrow">Kane County, Illinois</p>
+        <h1 id="app-title">Kane Condo</h1>
+      </div>
+      <span class="mode-badge">Local read-only runtime</span>
+    </header>
+
+    <section class="status-panel" aria-live="polite" aria-atomic="true">
+      <div class="status-panel__row">
+        <span id="status-indicator" class="status-indicator" data-state="checking" aria-hidden="true"></span>
+        <div>
+          <h2 id="status-title">Checking local package</h2>
+          <p id="status-message">Loading local configuration.</p>
+        </div>
+      </div>
+      <dl id="package-details" class="package-details" hidden>
+        <div><dt>County</dt><dd id="detail-county">—</dd></div>
+        <div><dt>Package created</dt><dd id="detail-created">—</dd></div>
+        <div><dt>Package identity</dt><dd id="detail-identity">—</dd></div>
+      </dl>
+      <pre id="error-detail" class="error-detail" hidden></pre>
+    </section>
+
+    <section class="map-placeholder" aria-label="Map area">
+      <p>Map rendering begins in Batch 035.</p>
+    </section>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
