@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Standard-library tests for the Batch 034 local loopback runtime."""
+"""Standard-library tests for the Kane Condo local loopback runtime."""
 
 from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -102,6 +104,82 @@ class LocalServerTests(unittest.TestCase):
     def test_non_loopback_bind_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "loopback"):
             SERVER.build_server(self.app, self.package, "0.0.0.0", 0)
+
+    def test_permanent_shell_contains_full_county_svg_viewport(self) -> None:
+        html = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn('id="map-panel"', html)
+        self.assertIn('id="map-canvas"', html)
+        self.assertIn('id="county-outline"', html)
+        self.assertIn('preserveAspectRatio="xMidYMid meet"', html)
+        self.assertNotIn("Map rendering begins in Batch 035", html)
+
+    def test_documentation_preserves_headless_orchestrator_boundary(self) -> None:
+        root_readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        app_readme = (ROOT / "app/README.md").read_text(encoding="utf-8")
+        for text in (root_readme, app_readme):
+            self.assertIn("orchestrator", text.lower())
+            self.assertIn("Batch 042", text)
+        self.assertIn("must not require a desktop browser", root_readme)
+        self.assertIn("acceptance on the orchestrator is headless", app_readme)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is not installed; browser math probe skipped")
+    def test_browser_overview_validation_fit_and_path_generation(self) -> None:
+        app_uri = (ROOT / "app/app.js").resolve().as_uri()
+        script = f"""
+import assert from 'node:assert/strict';
+import {{ validateCountyOverview, overviewViewBox, overviewPathData }} from {json.dumps(app_uri)};
+
+const manifest = {{
+  database: {{
+    county: {{county_key:'kane-county-il', fips_code:'17089', name:'Kane County', state_code:'IL'}},
+    accepted_releases: {{
+      'county-boundary': {{release_key:'boundary-release', release_content_sha256:'a'.repeat(64), feature_count:1}}
+    }}
+  }}
+}};
+const ring = [
+  [-88.0, 41.5], [-87.7, 41.5], [-87.7, 41.9], [-88.0, 41.9], [-88.0, 41.5]
+];
+const overview = {{
+  county: manifest.database.county,
+  fit: {{bounds:[-88.0,41.5,-87.7,41.9], center:[-87.85,41.7], height:0.4, width:0.3}},
+  format:'kane-condo-county-overview',
+  outline: {{
+    kind:'exterior-rings', ring_count:1, rings:[ring], simplification_tolerance_degrees:0.001,
+    source_interior_ring_count:0, source_vertex_count:5, vertex_count:5
+  }},
+  source: {{
+    dataset_key:'county-boundary', geometry_sha256:'b'.repeat(64), geometry_type:'Polygon',
+    release_content_sha256:'a'.repeat(64), release_key:'boundary-release', source_feature_id:'boundary-1'
+  }},
+  srs_id:4326,
+  version:1
+}};
+
+const validated = validateCountyOverview(overview, manifest);
+assert.deepEqual(validated.fit.bounds, [-88.0,41.5,-87.7,41.9]);
+const viewBox = overviewViewBox(validated.fit.bounds);
+assert.equal(viewBox.length, 4);
+assert.ok(viewBox[0] < -88.0);
+assert.ok(viewBox[1] < -41.9);
+assert.ok(viewBox[2] > 0.3);
+assert.ok(viewBox[3] > 0.4);
+const path = overviewPathData(validated.outline.rings);
+assert.match(path, /^M -88 -41.5 /);
+assert.match(path, / Z$/);
+
+const incompatible = structuredClone(overview);
+incompatible.source.release_key = 'wrong-release';
+assert.throws(() => validateCountyOverview(incompatible, manifest), /boundary release does not match/);
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "--input-type=module"],
+            input=script,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
 
 
 if __name__ == "__main__":

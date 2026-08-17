@@ -32,8 +32,18 @@
       <pre id="error-detail" class="error-detail" hidden></pre>
     </section>
 
-    <section class="map-placeholder" aria-label="Map area">
-      <p>Map rendering begins in Batch 035.</p>
+    <section id="map-panel" class="map-panel" aria-label="Kane County map" hidden>
+      <svg
+        id="map-canvas"
+        class="map-canvas"
+        role="img"
+        aria-labelledby="map-title map-caption"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <title id="map-title">Kane County outline</title>
+        <path id="county-outline" class="county-outline" vector-effect="non-scaling-stroke"></path>
+      </svg>
+      <p id="map-caption" class="map-caption">Complete Kane County outline</p>
     </section>
   </main>
   <script type="module" src="/app.js"></script>

@@ -35,7 +35,15 @@ bash verify-linux.sh
 
 The command uses Python's standard library for repository, database, render-package, and local-runtime verification. It validates the repository skeleton, migration filename rules, source syntax, the absence of prohibited generated or production artifacts, and the bounded subsystem tests.
 
-## Local read-only application shell
+## Development and workstation acceptance boundary
+
+The development/processing orchestrator is not the Kane Condo user workstation. Normal development verification on the orchestrator is headless and must not require a desktop browser, workstation USB access, or opening the orchestrator's loopback URL from the user's workstation.
+
+The browser application, local launcher, and USB-resident package are ultimately exercised on the target Windows and Ubuntu user workstations. Milestone 4 Batch 042 is the explicit physical workstation/USB acceptance batch for startup, county overview, navigation, dense rendering, and performance. Earlier Milestone 4 batches are accepted on the orchestrator through their bounded automated tests and source/package-contract checks unless a batch explicitly defines an earlier target-workstation test.
+
+Do not treat lack of a browser or accessible USB ports on the orchestrator as a Kane Condo runtime failure.
+
+## Local read-only application
 
 Batch 034 adds the first Milestone 4 browser runtime. It serves the browser application and one external Milestone 3 render package from a loopback-only local origin:
 
@@ -43,8 +51,8 @@ Batch 034 adds the first Milestone 4 browser runtime. It serves the browser appl
 bash app/kane-local.sh /path/to/render-package
 ```
 
-The browser validates the local package manifest and all required component byte lengths and SHA-256 hashes before declaring the package ready. Batch 034 does not render the map, contact the future private API, or permit classification writes.
+The browser validates the local package manifest and all required component byte lengths and SHA-256 hashes before declaring the package ready. Batch 035 adds the fitted full-county opening outline from `county-overview.json`. These batches do not contact the future private API or permit classification writes.
 
 ## Development boundary
 
-Batches 008–015 establish the GeoPackage 1.4.0 core, immutable migration identity, administrative source provenance, county boundary, roads, water, official building releases, project-owned building identities, authoritative building classifications with append-only history, and a verified clean seed-import path from the accepted donor GeoPackage. Batches 016–024 establish refresh detection, candidate harvesting, comparison, identity reconciliation, promotion, and rollback. Batches 025–033 establish the reproducible offline render package. Batch 034 begins the offline, read-only browser application while preserving the separation between local rendering and the future private authoritative server.
+Batches 008–015 establish the GeoPackage 1.4.0 core, immutable migration identity, administrative source provenance, county boundary, roads, water, official building releases, project-owned building identities, authoritative building classifications with append-only history, and a verified clean seed-import path from the accepted donor GeoPackage. Batches 016–024 establish refresh detection, candidate harvesting, comparison, identity reconciliation, promotion, and rollback. Batches 025–033 establish the reproducible offline render package. Batches 034–035 begin the offline, read-only browser application while preserving the separation between local rendering and the future private authoritative server.

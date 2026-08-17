@@ -1,8 +1,8 @@
 # Kane Condo local browser application
 
-Batch 034 establishes only the local read-only application shell and package-open boundary.
-It does not render the county map, decode LOD chunks, hit-test buildings, edit classifications,
-or contact the future private Kane Condo API.
+Batch 034 established the local read-only application shell and validated package-open boundary.
+Batch 035 adds only the full-county opening view. It does not add pan/zoom, LOD rendering,
+hit testing, classification controls, editing, or contact with the future private Kane Condo API.
 
 ## Local-origin contract
 
@@ -21,9 +21,9 @@ The server binds to `127.0.0.1:8765` by default and serves:
 An alternate loopback port may be selected with `--port`. Non-loopback bind addresses are rejected.
 The package remains external generated data and is not copied into Git.
 
-## Batch 034 startup behavior
+## Package-open behavior
 
-The browser loads `/config.json`, then `render-package-manifest.json`. Before declaring the package ready it verifies:
+The browser loads `/config.json`, then `render-package-manifest.json`. Before opening the map it verifies:
 
 - the local runtime configuration format/version;
 - the exact Batch 032 manifest format/version and field inventory;
@@ -33,9 +33,22 @@ The browser loads `/config.json`, then `render-package-manifest.json`. Before de
 - the internal format/version of the two small JSON components.
 
 The user interface reports precise configuration, compatibility, missing-resource, length, and hash errors.
-A valid package reaches `Local package ready`; an invalid package never reaches ready state.
+An invalid package never opens a county map.
 
-Component hashing intentionally reads the complete five-component package in Batch 034. Efficient byte-range LOD access and map rendering are later Milestone 4 batches and are not preimplemented here.
+## Batch 035 full-county opening view
+
+After package validation succeeds, the browser loads the already-validated `county-overview.json` component.
+It requires the Batch 027 overview format/version, EPSG:4326, Kane County identity, the same accepted county-boundary release recorded in the package manifest, internally consistent exact fit metadata, and valid closed exterior rings.
+
+The map uses the exact accepted source bounds from the overview's `fit.bounds` field. A small deterministic padding is added to the SVG view box, and `preserveAspectRatio="xMidYMid meet"` keeps the complete county extent visible as the browser viewport changes size. The simplified exterior rings are used only for this overview drawing; they do not replace the exact source bounds.
+
+Batch 035 does not decode roads, water, or building LOD containers and does not add navigation behavior. Those remain later Milestone 4 batches.
+
+## Acceptance environment
+
+The development/processing orchestrator is not the Kane Condo user workstation. Batch 035 acceptance on the orchestrator is headless: run the repository/app tests and verify the bounded source changes. Do not require a desktop browser on the orchestrator, do not ask the user to open an orchestrator loopback URL from another machine, and do not require workstation USB access.
+
+Physical browser, Windows/Ubuntu workstation, and USB-runtime acceptance is reserved for Milestone 4 Batch 042 unless an earlier batch explicitly defines a target-workstation test. Lack of browser or accessible USB hardware on the orchestrator is therefore not a Batch 035 failure.
 
 ## Tests
 
@@ -43,5 +56,6 @@ Component hashing intentionally reads the complete five-component package in Bat
 bash app/run-tests.sh
 ```
 
-The committed test suite uses only Python's standard library and verifies loopback-only serving, external-package routing, generated configuration, HEAD behavior, disabled directory listings, and path isolation.
-Browser package-validation acceptance is exercised against a generated disposable package; production county data is never committed.
+The committed standard-library test suite continues to verify loopback-only serving, external-package routing, generated configuration, HEAD behavior, disabled directory listings, and path isolation. It also checks that the permanent browser shell contains the Batch 035 SVG map viewport. When Node.js is available, the same suite executes the exported browser overview validation, view-box fitting, path-generation, and incompatible-release cases directly from `app/app.js`; absence of Node.js skips only that browser-logic probe and does not add a runtime dependency.
+
+Production county data is never committed.
