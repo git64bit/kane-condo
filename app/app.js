@@ -26,6 +26,15 @@ const ROAD_LEVEL_KEYS = ["orientation", "context", "detail"];
 const ROAD_CONTEXT_ZOOM = 4;
 const ROAD_DETAIL_ZOOM = 16;
 
+const WATER_MAGIC = "KCRW029\n";
+const WATER_FORMAT = "kane-condo-water-lod";
+const WATER_VERSION = 1;
+const WATER_SRS_ID = 4326;
+const WATER_LEVEL_KEYS = ["overview", "context", "detail"];
+const WATER_CREEK_FRACTIONS = [0, 0.60, 1];
+const WATER_CONTEXT_ZOOM = 4;
+const WATER_DETAIL_ZOOM = 16;
+
 function fail(code, message, detail = null) {
   throw new PackageValidationError(code, message, detail);
 }
@@ -36,6 +45,10 @@ function overviewFail(message, detail = null) {
 
 function roadFail(message, detail = null) {
   fail("ROAD_INCOMPATIBLE", message, detail);
+}
+
+function waterFail(message, detail = null) {
+  fail("WATER_INCOMPATIBLE", message, detail);
 }
 
 function isPlainObject(value) {
@@ -264,11 +277,11 @@ function installMapNavigation(ui, homeViewBox, onViewChange = () => {}) {
 // End Batch 036 navigation.
 
 // Batch 037 roads: validated local KRF bytes, decoded only in browser memory.
-function readUint64BigEndian(view, offset) {
+function readUint64BigEndian(view, offset, failure = roadFail, label = "Road KRF") {
   const high = view.getUint32(offset, false);
   const low = view.getUint32(offset + 4, false);
   const value = (high * 4294967296) + low;
-  if (!Number.isSafeInteger(value)) roadFail("Road KRF index length exceeds browser-safe integer range.");
+  if (!Number.isSafeInteger(value)) failure(`${label} index length exceeds browser-safe integer range.`);
   return value;
 }
 
@@ -427,7 +440,7 @@ export function roadLevelForViewBox(viewBox, homeViewBox) {
   return "orientation";
 }
 
-function createRoadLayerController(ui, container, homeViewBox) {
+function createRoadLayerController(ui, container, homeViewBox, onLevelChange = () => {}) {
   const cache = new Map();
   const pending = new Map();
   let visibleLevel = null;
@@ -460,11 +473,262 @@ function createRoadLayerController(ui, container, homeViewBox) {
     ui.roadPath.setAttribute("d", pathData);
     ui.roadPath.dataset.level = levelKey;
     visibleLevel = levelKey;
-    ui.mapCaption.textContent = `Road detail: ${levelKey} • drag to pan • wheel or trackpad to zoom`;
+    onLevelChange(levelKey);
   };
   return { request, getVisibleLevel: () => visibleLevel };
 }
 // End Batch 037 roads.
+
+
+// Batch 038 water: validated local KRF bytes, decoded only in browser memory.
+function requireWaterBounds(bounds, label) {
+  if (!Array.isArray(bounds) || bounds.length !== 4) waterFail(`${label} bounds are invalid.`);
+  const values = bounds.map((value, index) => finiteNumber(value, `${label} bound ${index}`, waterFail));
+  if (values[2] < values[0] || values[3] < values[1]) waterFail(`${label} bounds are inverted.`);
+  return values;
+}
+
+function validateWaterDatasetSource(dataset, expectedDatasetKey, manifestRelease, label) {
+  const source = exactKeys(dataset, ["dataset_key", "feature_count", "release_content_sha256", "release_key"], label, waterFail);
+  if (source.dataset_key !== expectedDatasetKey) waterFail(`${label} dataset key is invalid.`);
+  if (!Number.isSafeInteger(source.feature_count) || source.feature_count < 1) waterFail(`${label} feature count is invalid.`);
+  if (!isPlainObject(manifestRelease) || source.release_key !== manifestRelease.release_key || source.release_content_sha256 !== manifestRelease.release_content_sha256 || source.feature_count !== manifestRelease.feature_count) {
+    waterFail(`${label} release does not match the validated package manifest.`);
+  }
+  return source;
+}
+
+function validateWaterIndex(index, manifest, payloadLength) {
+  exactKeys(index, ["chunk_feature_limit", "format", "levels", "selection", "source", "srs_id", "version", "water_bounds"], "Water KRF index", waterFail);
+  if (index.format !== WATER_FORMAT || index.version !== WATER_VERSION) waterFail(`Unsupported water KRF ${String(index.format)} version ${String(index.version)}.`);
+  if (index.srs_id !== WATER_SRS_ID) waterFail(`Water KRF SRS ${String(index.srs_id)} is unsupported.`);
+  if (!Number.isSafeInteger(index.chunk_feature_limit) || index.chunk_feature_limit < 1) waterFail("Water KRF chunk feature limit is invalid.");
+  requireWaterBounds(index.water_bounds, "Water KRF");
+
+  const selection = exactKeys(index.selection, ["coordinate_score_scale", "creek_basis", "fox_river_rule", "note"], "Water KRF selection", waterFail);
+  if (selection.creek_basis !== "deterministic-coordinate-length-score") waterFail("Water KRF creek selection basis is incompatible.");
+  if (selection.fox_river_rule !== "all-accepted-features-in-every-level") waterFail("Water KRF Fox River selection rule is incompatible.");
+  if (!Number.isSafeInteger(selection.coordinate_score_scale) || selection.coordinate_score_scale < 1) waterFail("Water KRF coordinate score scale is invalid.");
+  if (typeof selection.note !== "string") waterFail("Water KRF selection note is invalid.");
+
+  const source = exactKeys(index.source, ["county", "datasets"], "Water KRF source", waterFail);
+  const county = exactKeys(source.county, ["county_key", "fips_code", "name", "state_code"], "Water KRF county", waterFail);
+  const manifestCounty = manifest?.database?.county;
+  for (const key of Object.keys(EXPECTED_COUNTY)) {
+    if (county[key] !== EXPECTED_COUNTY[key] || county[key] !== manifestCounty?.[key]) waterFail(`Water KRF county ${key} does not match the validated package.`);
+  }
+  const datasets = exactKeys(source.datasets, ["creeks", "fox_river"], "Water KRF datasets", waterFail);
+  const accepted = manifest?.database?.accepted_releases;
+  const fox = validateWaterDatasetSource(datasets.fox_river, "water-fox-river", accepted?.["water-fox-river"], "Water KRF Fox River source");
+  const creeks = validateWaterDatasetSource(datasets.creeks, "water-creeks", accepted?.["water-creeks"], "Water KRF creek source");
+
+  if (!Array.isArray(index.levels) || index.levels.length !== WATER_LEVEL_KEYS.length) waterFail("Water KRF must contain exactly three LOD levels.");
+  let expectedOffset = 0;
+  let previousCreekCount = -1;
+  for (let levelIndex = 0; levelIndex < WATER_LEVEL_KEYS.length; levelIndex += 1) {
+    const level = exactKeys(index.levels[levelIndex], ["chunks", "creek_feature_count", "creek_length_fraction", "feature_count", "fox_river_feature_count", "key", "purpose", "rank", "simplification_tolerance_degrees", "source_vertex_count", "vertex_count"], `Water KRF level ${levelIndex}`, waterFail);
+    if (level.key !== WATER_LEVEL_KEYS[levelIndex] || level.rank !== levelIndex) waterFail("Water KRF LOD order/rank is incompatible.");
+    if (level.creek_length_fraction !== WATER_CREEK_FRACTIONS[levelIndex]) waterFail(`Water KRF level ${level.key} creek fraction is incompatible.`);
+    if (!Number.isSafeInteger(level.fox_river_feature_count) || level.fox_river_feature_count !== fox.feature_count) waterFail(`Water KRF level ${level.key} does not contain every Fox River feature.`);
+    if (!Number.isSafeInteger(level.creek_feature_count) || level.creek_feature_count < 0 || level.creek_feature_count < previousCreekCount || level.creek_feature_count > creeks.feature_count) waterFail(`Water KRF level ${level.key} creek count is invalid or non-monotonic.`);
+    previousCreekCount = level.creek_feature_count;
+    if (!Number.isSafeInteger(level.feature_count) || level.feature_count !== level.fox_river_feature_count + level.creek_feature_count) waterFail(`Water KRF level ${level.key} feature count is inconsistent.`);
+    if (!Array.isArray(level.chunks) || level.chunks.length < 1) waterFail(`Water KRF level ${level.key} has no chunks.`);
+    let chunkFeatures = 0;
+    for (const chunk of level.chunks) {
+      exactKeys(chunk, ["bounds", "feature_count", "length", "offset", "payload_sha256", "records_sha256", "uncompressed_length"], `Water KRF ${level.key} chunk`, waterFail);
+      requireWaterBounds(chunk.bounds, `Water KRF ${level.key} chunk`);
+      if (![chunk.feature_count, chunk.length, chunk.offset, chunk.uncompressed_length].every(Number.isSafeInteger)) waterFail(`Water KRF ${level.key} chunk integer fields are invalid.`);
+      if (chunk.feature_count < 1 || chunk.feature_count > index.chunk_feature_limit || chunk.length < 1 || chunk.uncompressed_length < 1 || chunk.offset !== expectedOffset) waterFail(`Water KRF ${level.key} chunk framing is invalid.`);
+      if (!/^[0-9a-f]{64}$/.test(chunk.payload_sha256) || !/^[0-9a-f]{64}$/.test(chunk.records_sha256)) waterFail(`Water KRF ${level.key} chunk hashes are invalid.`);
+      expectedOffset += chunk.length;
+      chunkFeatures += chunk.feature_count;
+    }
+    if (chunkFeatures !== level.feature_count) waterFail(`Water KRF level ${level.key} chunk feature count does not match its level count.`);
+  }
+  if (index.levels[0].creek_feature_count !== 0) waterFail("Water KRF overview level unexpectedly contains creek features.");
+  if (index.levels[2].creek_feature_count !== creeks.feature_count || index.levels[2].feature_count !== fox.feature_count + creeks.feature_count) waterFail("Water KRF detail level is not the complete accepted water context.");
+  if (expectedOffset !== payloadLength) waterFail("Water KRF payload length does not match the chunk inventory.");
+  return index;
+}
+
+export function parseWaterContainer(bytes, manifest) {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (data.byteLength < WATER_MAGIC.length + 8) waterFail("Water KRF is truncated before its index.");
+  const magic = new TextDecoder("ascii", { fatal: true }).decode(data.slice(0, WATER_MAGIC.length));
+  if (magic !== WATER_MAGIC) waterFail("Water KRF magic header is invalid.");
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const indexLength = readUint64BigEndian(view, WATER_MAGIC.length, waterFail, "Water KRF");
+  const indexStart = WATER_MAGIC.length + 8;
+  const indexEnd = indexStart + indexLength;
+  if (indexEnd > data.byteLength) waterFail("Water KRF index is truncated.");
+  let indexText;
+  let index;
+  try {
+    indexText = new TextDecoder("utf-8", { fatal: true }).decode(data.slice(indexStart, indexEnd));
+    index = JSON.parse(indexText);
+  } catch (error) {
+    waterFail("Water KRF index is not valid UTF-8 JSON.", String(error));
+  }
+  if (indexText !== canonicalize(index)) waterFail("Water KRF index is not canonical JSON.");
+  const payload = data.slice(indexEnd);
+  validateWaterIndex(index, manifest, payload.byteLength);
+  return { index, payload };
+}
+
+async function inflateWaterZlib(compressed) {
+  if (typeof DecompressionStream !== "function") fail("WATER_DECOMPRESSION_UNAVAILABLE", "This browser does not provide deflate decompression required by the water package.");
+  try {
+    const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  } catch (error) {
+    fail("WATER_DECOMPRESSION_FAILED", "A water KRF chunk could not be decompressed.", String(error));
+  }
+}
+
+function validatePosition(point, label) {
+  if (!Array.isArray(point) || point.length !== 2 || point.some((value) => typeof value !== "number" || !Number.isFinite(value))) waterFail(`${label} contains an invalid coordinate.`);
+}
+
+function validateWaterLine(line, label) {
+  if (!Array.isArray(line) || line.length < 2) waterFail(`${label} contains a line with fewer than two points.`);
+  for (const point of line) validatePosition(point, label);
+}
+
+function validateWaterRing(ring, label) {
+  if (!Array.isArray(ring) || ring.length < 4) waterFail(`${label} contains a polygon ring with fewer than four points.`);
+  for (const point of ring) validatePosition(point, label);
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) waterFail(`${label} contains an open polygon ring.`);
+}
+
+function validateWaterRecord(record, label) {
+  exactKeys(record, ["bounds", "coordinates", "dataset_key", "geometry_type", "source_feature_id"], label, waterFail);
+  requireWaterBounds(record.bounds, label);
+  if (typeof record.source_feature_id !== "string" || record.source_feature_id.length === 0) waterFail(`${label} source identity is invalid.`);
+  if (record.dataset_key === "water-fox-river") {
+    if (record.geometry_type !== "Polygon" && record.geometry_type !== "MultiPolygon") waterFail(`${label} Fox River geometry type is unsupported.`);
+    const polygons = record.geometry_type === "Polygon" ? [record.coordinates] : record.coordinates;
+    if (!Array.isArray(polygons) || polygons.length < 1) waterFail(`${label} contains no polygon coordinates.`);
+    for (const polygon of polygons) {
+      if (!Array.isArray(polygon) || polygon.length < 1) waterFail(`${label} contains an empty polygon.`);
+      for (const ring of polygon) validateWaterRing(ring, label);
+    }
+  } else if (record.dataset_key === "water-creeks") {
+    if (record.geometry_type !== "LineString" && record.geometry_type !== "MultiLineString") waterFail(`${label} creek geometry type is unsupported.`);
+    const lines = record.geometry_type === "LineString" ? [record.coordinates] : record.coordinates;
+    if (!Array.isArray(lines) || lines.length < 1) waterFail(`${label} contains no line coordinates.`);
+    for (const line of lines) validateWaterLine(line, label);
+  } else {
+    waterFail(`${label} dataset key is unsupported.`);
+  }
+  return record;
+}
+
+export async function decodeWaterLevel(container, levelKey) {
+  if (!WATER_LEVEL_KEYS.includes(levelKey)) waterFail(`Unknown water LOD level ${String(levelKey)}.`);
+  const level = container.index.levels.find((candidate) => candidate.key === levelKey);
+  if (!level) waterFail(`Water KRF does not contain level ${levelKey}.`);
+  const records = [];
+  let foxCount = 0;
+  let creekCount = 0;
+  for (const [chunkIndex, chunk] of level.chunks.entries()) {
+    const compressed = container.payload.slice(chunk.offset, chunk.offset + chunk.length);
+    if (await sha256Bytes(compressed) !== chunk.payload_sha256) waterFail(`Water KRF ${levelKey} chunk ${chunkIndex} compressed hash is invalid.`);
+    const raw = await inflateWaterZlib(compressed);
+    if (raw.byteLength !== chunk.uncompressed_length) waterFail(`Water KRF ${levelKey} chunk ${chunkIndex} decompressed length is invalid.`);
+    if (await sha256Bytes(raw) !== chunk.records_sha256) waterFail(`Water KRF ${levelKey} chunk ${chunkIndex} record hash is invalid.`);
+    let text;
+    let chunkRecords;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(raw);
+      chunkRecords = JSON.parse(text);
+    } catch (error) {
+      waterFail(`Water KRF ${levelKey} chunk ${chunkIndex} records are invalid JSON.`, String(error));
+    }
+    if (text !== canonicalize(chunkRecords)) waterFail(`Water KRF ${levelKey} chunk ${chunkIndex} records are not canonical JSON.`);
+    if (!Array.isArray(chunkRecords) || chunkRecords.length !== chunk.feature_count) waterFail(`Water KRF ${levelKey} chunk ${chunkIndex} feature count is invalid.`);
+    for (let recordIndex = 0; recordIndex < chunkRecords.length; recordIndex += 1) {
+      const record = validateWaterRecord(chunkRecords[recordIndex], `Water ${levelKey} record ${records.length + recordIndex}`);
+      if (record.dataset_key === "water-fox-river") foxCount += 1;
+      else creekCount += 1;
+    }
+    records.push(...chunkRecords);
+  }
+  if (records.length !== level.feature_count || foxCount !== level.fox_river_feature_count || creekCount !== level.creek_feature_count) waterFail(`Water KRF level ${levelKey} decoded feature counts are invalid.`);
+  return records;
+}
+
+function ringPathData(ring) {
+  const points = ring.slice(0, -1);
+  const commands = [linePathData(points), "Z"];
+  return commands.join(" ");
+}
+
+export function waterPathData(records) {
+  const polygonPaths = [];
+  const linePaths = [];
+  for (const record of records) {
+    if (record.dataset_key === "water-fox-river") {
+      const polygons = record.geometry_type === "Polygon" ? [record.coordinates] : record.coordinates;
+      for (const polygon of polygons) for (const ring of polygon) polygonPaths.push(ringPathData(ring));
+    } else {
+      const lines = record.geometry_type === "LineString" ? [record.coordinates] : record.coordinates;
+      for (const line of lines) linePaths.push(linePathData(line));
+    }
+  }
+  return { polygonPath: polygonPaths.join(" "), linePath: linePaths.join(" ") };
+}
+
+export function waterLevelForViewBox(viewBox, homeViewBox) {
+  validateViewBox(viewBox); validateViewBox(homeViewBox);
+  const zoom = homeViewBox[2] / viewBox[2];
+  if (zoom >= WATER_DETAIL_ZOOM) return "detail";
+  if (zoom >= WATER_CONTEXT_ZOOM) return "context";
+  return "overview";
+}
+
+function createWaterLayerController(ui, container, homeViewBox, onLevelChange = () => {}) {
+  const cache = new Map();
+  const pending = new Map();
+  let visibleLevel = null;
+  let wantedLevel = null;
+  let requestSerial = 0;
+
+  const loadPaths = (levelKey) => {
+    if (cache.has(levelKey)) return Promise.resolve(cache.get(levelKey));
+    if (pending.has(levelKey)) return pending.get(levelKey);
+    const work = decodeWaterLevel(container, levelKey).then((records) => {
+      const paths = waterPathData(records);
+      cache.set(levelKey, paths);
+      pending.delete(levelKey);
+      return paths;
+    }, (error) => {
+      pending.delete(levelKey);
+      throw error;
+    });
+    pending.set(levelKey, work);
+    return work;
+  };
+
+  const request = async (viewBox) => {
+    const levelKey = waterLevelForViewBox(viewBox, homeViewBox);
+    wantedLevel = levelKey;
+    if (visibleLevel === levelKey) return;
+    const serial = ++requestSerial;
+    const paths = await loadPaths(levelKey);
+    if (serial !== requestSerial || wantedLevel !== levelKey) return;
+    ui.waterPolygons.setAttribute("d", paths.polygonPath);
+    ui.waterLines.setAttribute("d", paths.linePath);
+    ui.waterPolygons.dataset.level = levelKey;
+    ui.waterLines.dataset.level = levelKey;
+    visibleLevel = levelKey;
+    onLevelChange(levelKey);
+  };
+  return { request, getVisibleLevel: () => visibleLevel };
+}
+// End Batch 038 water.
 
 async function loadConfig() {
   let response;
@@ -498,7 +762,7 @@ function getUi(doc) {
   return {
     indicator: doc.querySelector("#status-indicator"), title: doc.querySelector("#status-title"), message: doc.querySelector("#status-message"),
     details: doc.querySelector("#package-details"), detailCounty: doc.querySelector("#detail-county"), detailCreated: doc.querySelector("#detail-created"), detailIdentity: doc.querySelector("#detail-identity"),
-    errorDetail: doc.querySelector("#error-detail"), mapPanel: doc.querySelector("#map-panel"), mapCanvas: doc.querySelector("#map-canvas"), countyPath: doc.querySelector("#county-outline"), roadPath: doc.querySelector("#road-network"), mapCaption: doc.querySelector("#map-caption"), resetView: doc.querySelector("#reset-county-view"),
+    errorDetail: doc.querySelector("#error-detail"), mapPanel: doc.querySelector("#map-panel"), mapCanvas: doc.querySelector("#map-canvas"), countyPath: doc.querySelector("#county-outline"), waterPolygons: doc.querySelector("#water-polygons"), waterLines: doc.querySelector("#water-lines"), roadPath: doc.querySelector("#road-network"), mapCaption: doc.querySelector("#map-caption"), resetView: doc.querySelector("#reset-county-view"),
   };
 }
 
@@ -515,7 +779,7 @@ function renderCountyOverview(ui, overview) {
   applyViewBox(ui.mapCanvas, viewBox);
   ui.mapCanvas.setAttribute("preserveAspectRatio", "xMidYMid meet");
   ui.countyPath.setAttribute("d", overviewPathData(overview.outline.rings));
-  ui.mapCaption.textContent = "Loading county road orientation layer";
+  ui.mapCaption.textContent = "Loading county road and water overview layers";
   ui.mapPanel.hidden = false;
   return viewBox;
 }
@@ -526,11 +790,16 @@ async function start(doc = document) {
     setStatus(ui, "checking", "Checking local package", "Loading local configuration.");
     const config = await loadConfig();
     let roadsBytes = null;
+    let waterBytes = null;
     const manifest = await validateLocalPackage(config, {
       onProgress(progress) { setStatus(ui, "checking", "Checking local package", progress.message); },
-      onComponent(component, bytes) { if (component.role === "roads") roadsBytes = bytes; },
+      onComponent(component, bytes) {
+        if (component.role === "roads") roadsBytes = bytes;
+        if (component.role === "water") waterBytes = bytes;
+      },
     });
     if (!roadsBytes) fail("ROAD_INCOMPATIBLE", "Validated package did not expose its road component bytes.");
+    if (!waterBytes) fail("WATER_INCOMPATIBLE", "Validated package did not expose its water component bytes.");
     const county = manifest.database.county;
     ui.detailCounty.textContent = `${county.name}, ${county.state_code}`;
     ui.detailCreated.textContent = manifest.created_at;
@@ -541,15 +810,24 @@ async function start(doc = document) {
     const overview = await loadCountyOverview(config, manifest);
     const homeViewBox = renderCountyOverview(ui, overview);
 
-    setStatus(ui, "checking", "Opening Kane County", "Decoding the county road orientation layer.");
+    setStatus(ui, "checking", "Opening Kane County", "Decoding county road and water overview layers.");
     const roadContainer = parseRoadContainer(roadsBytes, manifest);
-    const roads = createRoadLayerController(ui, roadContainer, homeViewBox);
-    await roads.request(homeViewBox);
+    const waterContainer = parseWaterContainer(waterBytes, manifest);
+    const visibleLevels = { road: null, water: null };
+    const updateCaption = () => {
+      const road = visibleLevels.road ?? "loading";
+      const water = visibleLevels.water ?? "loading";
+      ui.mapCaption.textContent = `Road detail: ${road} • Water detail: ${water} • drag to pan • wheel or trackpad to zoom`;
+    };
+    const roads = createRoadLayerController(ui, roadContainer, homeViewBox, (level) => { visibleLevels.road = level; updateCaption(); });
+    const water = createWaterLayerController(ui, waterContainer, homeViewBox, (level) => { visibleLevels.water = level; updateCaption(); });
+    await Promise.all([roads.request(homeViewBox), water.request(homeViewBox)]);
     installMapNavigation(ui, homeViewBox, (viewBox) => {
       roads.request(viewBox).catch((error) => showError(ui, error));
+      water.request(viewBox).catch((error) => showError(ui, error));
     });
 
-    setStatus(ui, "ready", "Kane County ready", "Continuous navigation and progressive local road rendering are available without data writes.");
+    setStatus(ui, "ready", "Kane County ready", "Continuous navigation with progressive local road and water rendering is available without data writes.");
     doc.documentElement.dataset.packageState = "ready";
   } catch (error) { showError(ui, error); }
 }

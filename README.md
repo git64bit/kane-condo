@@ -45,10 +45,10 @@ Do not treat lack of a browser or accessible USB ports on the orchestrator as a 
 
 ## Local read-only application
 
-Batch 034 added the local browser runtime and package validation. Batch 035 added the fitted full-county opening outline. Batch 036 added continuous browser-side pan and pointer-anchored zoom. Batch 037 adds progressive browser-side road rendering from the existing `roads-lod.krf` component: orientation at county scale, context at intermediate scale, and exact detail at close scale.
+Batch 034 added the local browser runtime and package validation. Batch 035 added the fitted full-county opening outline. Batch 036 added continuous browser-side pan and pointer-anchored zoom. Batch 037 added progressive browser-side road rendering from `roads-lod.krf`. Batch 038 adds progressive browser-side water rendering from `water-lod.krf`: Fox River at county scale, creek context at intermediate scale, and the complete exact water context at close scale.
 
-The application logic remains browser-side HTML, CSS, and JavaScript. The current Python loopback runtime is a local static-serving mechanism, not an application dependency or authoritative backend. Road KRF parsing, zlib decompression, validation, LOD selection, and SVG rendering occur in the browser; the host only serves static files.
+The application logic remains browser-side HTML, CSS, and JavaScript. The current Python loopback runtime is a local static-serving mechanism, not an application dependency or authoritative backend. Road and water KRF parsing, zlib decompression, validation, LOD selection, and SVG rendering occur in the browser; the host only serves static files.
 
 ## Development boundary
 
-Batches 008–015 establish the GeoPackage core and authoritative data model. Batches 016–024 establish refresh detection, candidate processing, reconciliation, promotion, and rollback. Batches 025–033 establish the reproducible offline render package. Batches 034–037 establish the initial offline, read-only browser application, full-county opening view, continuous navigation, and progressive road rendering while preserving the separation between local rendering and the future private authoritative server.
+Batches 008–015 establish the GeoPackage core and authoritative data model. Batches 016–024 establish refresh detection, candidate processing, reconciliation, promotion, and rollback. Batches 025–033 establish the reproducible offline render package. Batches 034–038 establish the initial offline, read-only browser application, full-county opening view, continuous navigation, and progressive road/water rendering while preserving the separation between local rendering and the future private authoritative server.

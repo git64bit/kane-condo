@@ -29,6 +29,7 @@ class LocalServerTests(unittest.TestCase):
         (self.app / "app.js").write_text("export const ok = true;\n", encoding="utf-8")
         (self.package / "render-package-manifest.json").write_text("{}", encoding="utf-8")
         (self.package / "roads-lod.krf").write_bytes(b"krf-test")
+        (self.package / "water-lod.krf").write_bytes(b"water-test")
         self.server = SERVER.build_server(self.app, self.package, "127.0.0.1", 0); self.thread = threading.Thread(target=self.server.serve_forever, daemon=True); self.thread.start()
         host, port = self.server.server_address[:2]; self.base = f"http://{host}:{port}"
     def tearDown(self) -> None:
@@ -43,6 +44,7 @@ class LocalServerTests(unittest.TestCase):
         document=json.loads(payload); self.assertEqual(SERVER.CONFIG_FORMAT,document["format"]); self.assertEqual(SERVER.CONFIG_VERSION,document["version"]); self.assertEqual("/package/render-package-manifest.json",document["package_manifest_url"]); self.assertEqual(SERVER.canonical_json_bytes(document),payload)
     def test_package_files_are_served_from_external_directory(self):
         with self.fetch("/package/roads-lod.krf") as response: self.assertEqual(b"krf-test",response.read()); self.assertEqual("application/octet-stream",response.headers.get_content_type())
+        with self.fetch("/package/water-lod.krf") as response: self.assertEqual(b"water-test",response.read()); self.assertEqual("application/octet-stream",response.headers.get_content_type())
     def test_head_reports_length_without_body(self):
         with self.fetch("/package/roads-lod.krf", method="HEAD") as response: self.assertEqual("8",response.headers["Content-Length"]); self.assertEqual(b"",response.read())
     def test_directory_listing_is_not_exposed(self):
@@ -55,9 +57,9 @@ class LocalServerTests(unittest.TestCase):
             self.assertEqual(404,context.exception.code)
     def test_non_loopback_bind_is_rejected(self):
         with self.assertRaisesRegex(ValueError,"loopback"): SERVER.build_server(self.app,self.package,"0.0.0.0",0)
-    def test_permanent_shell_contains_progressive_roads_and_navigation(self):
+    def test_permanent_shell_contains_progressive_roads_water_and_navigation(self):
         html=(ROOT/"app/index.html").read_text(encoding="utf-8")
-        for marker in ('id="map-panel"','id="map-canvas"','id="county-outline"','id="road-network"','id="reset-county-view"','preserveAspectRatio="xMidYMid meet"'): self.assertIn(marker,html)
+        for marker in ('id="map-panel"','id="map-canvas"','id="county-outline"','id="water-polygons"','id="water-lines"','id="road-network"','id="reset-county-view"','preserveAspectRatio="xMidYMid meet"'): self.assertIn(marker,html)
         self.assertNotIn("Map rendering begins in Batch 035",html)
     def test_documentation_preserves_headless_orchestrator_boundary(self):
         root_readme=(ROOT/"README.md").read_text(encoding="utf-8"); app_readme=(ROOT/"app/README.md").read_text(encoding="utf-8")
@@ -71,18 +73,23 @@ class LocalServerTests(unittest.TestCase):
         app=(ROOT/"app/app.js").read_text(encoding="utf-8"); validator=(ROOT/"app/package-validator.js").read_text(encoding="utf-8")
         road=app.split("// Batch 037 roads: validated local KRF bytes, decoded only in browser memory.",1)[1].split("// End Batch 037 roads.",1)[0]
         self.assertIn('new DecompressionStream("deflate")',road); self.assertNotIn("/api/",road); self.assertNotIn("localStorage",road); self.assertIn("onComponent(component, bytes)",validator); self.assertIn('component.role === "roads"',app)
+    def test_water_rendering_is_browser_side_and_reuses_validated_bytes(self):
+        app=(ROOT/"app/app.js").read_text(encoding="utf-8"); validator=(ROOT/"app/package-validator.js").read_text(encoding="utf-8")
+        water=app.split("// Batch 038 water: validated local KRF bytes, decoded only in browser memory.",1)[1].split("// End Batch 038 water.",1)[0]
+        self.assertIn('new DecompressionStream("deflate")',water); self.assertNotIn("/api/",water); self.assertNotIn("localStorage",water); self.assertIn("onComponent(component, bytes)",validator); self.assertIn('component.role === "water"',app)
+        self.assertIn('ui.waterPolygons.setAttribute("d"',water); self.assertIn('ui.waterLines.setAttribute("d"',water)
     @unittest.skipUnless(shutil.which("node"), "Node.js is not installed; browser math/KRF probe skipped")
-    def test_browser_overview_navigation_and_progressive_road_krf(self):
+    def test_browser_overview_navigation_and_progressive_road_water_krf(self):
         app_uri=(ROOT/"app/app.js").resolve().as_uri()
         script="""
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
 import crypto from 'node:crypto';
-import { validateCountyOverview, overviewViewBox, overviewPathData, viewportMetrics, clientPointToWorld, panViewBoxByPixels, zoomViewBoxAt, wheelSizeScale, resetViewBox, parseRoadContainer, decodeRoadLevel, roadPathData, roadLevelForViewBox } from __APP_URI__;
+import { validateCountyOverview, overviewViewBox, overviewPathData, viewportMetrics, clientPointToWorld, panViewBoxByPixels, zoomViewBoxAt, wheelSizeScale, resetViewBox, parseRoadContainer, decodeRoadLevel, roadPathData, roadLevelForViewBox, parseWaterContainer, decodeWaterLevel, waterPathData, waterLevelForViewBox } from __APP_URI__;
 const canon=(v)=>Array.isArray(v)?'['+v.map(canon).join(',')+']':(v!==null&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canon(v[k])).join(',')+'}':JSON.stringify(v));
 const sha=(b)=>crypto.createHash('sha256').update(b).digest('hex');
 const county={county_key:'kane-county-il',fips_code:'17089',name:'Kane County',state_code:'IL'};
-const manifest={database:{county,accepted_releases:{'county-boundary':{release_key:'boundary-release',release_content_sha256:'a'.repeat(64),feature_count:1},roads:{release_key:'roads-release',release_content_sha256:'c'.repeat(64),feature_count:3}}}};
+const manifest={database:{county,accepted_releases:{'county-boundary':{release_key:'boundary-release',release_content_sha256:'a'.repeat(64),feature_count:1},roads:{release_key:'roads-release',release_content_sha256:'c'.repeat(64),feature_count:3},'water-fox-river':{release_key:'fox-release',release_content_sha256:'d'.repeat(64),feature_count:1},'water-creeks':{release_key:'creek-release',release_content_sha256:'e'.repeat(64),feature_count:2}}}};
 const ring=[[-88,41.5],[-87.7,41.5],[-87.7,41.9],[-88,41.9],[-88,41.5]];
 const overview={county,fit:{bounds:[-88,41.5,-87.7,41.9],center:[-87.85,41.7],height:0.4,width:0.3},format:'kane-condo-county-overview',outline:{kind:'exterior-rings',ring_count:1,rings:[ring],simplification_tolerance_degrees:0.001,source_interior_ring_count:0,source_vertex_count:5,vertex_count:5},source:{dataset_key:'county-boundary',geometry_sha256:'b'.repeat(64),geometry_type:'Polygon',release_content_sha256:'a'.repeat(64),release_key:'boundary-release',source_feature_id:'boundary-1'},srs_id:4326,version:1};
 const validated=validateCountyOverview(overview,manifest); const home=overviewViewBox(validated.fit.bounds); assert.match(overviewPathData(validated.outline.rings),/^M -88 -41.5/); assert.ok(viewportMetrics(home,1200,700).scale>0); const centerA=clientPointToWorld(home,1200,700,600,350); const centerB=clientPointToWorld(home,1800,900,900,450); assert.ok(Math.abs(centerA[0]-centerB[0])<1e-12); const panned=panViewBoxByPixels(home,1200,700,100,-50); assert.ok(panned[0]<home[0]); const anchor=clientPointToWorld(home,1200,700,400,300); const zoomed=zoomViewBoxAt(home,home,anchor[0],anchor[1],0.5); assert.ok(zoomed[2]<home[2]); assert.ok(wheelSizeScale(-120)<1); assert.deepEqual(resetViewBox(home),home);
@@ -91,6 +98,12 @@ const levelRecords={orientation:[record('1',-87.95)],context:[record('1',-87.95)
 let offset=0; const payloads=[]; const levels=[]; for (const [rank,key] of ['orientation','context','detail'].entries()) { const raw=Buffer.from(canon(levelRecords[key])); const compressed=zlib.deflateSync(raw,{level:9}); const chunk={bounds:[-88,41.5,-87.7,41.9],feature_count:levelRecords[key].length,length:compressed.length,offset,payload_sha256:sha(compressed),records_sha256:sha(raw),uncompressed_length:raw.length}; payloads.push(compressed); offset+=compressed.length; levels.push({chunks:[chunk],cumulative_length_fraction:[0.35,0.75,1][rank],feature_count:levelRecords[key].length,key,purpose:['county-orientation','regional-context','complete-exact-network'][rank],rank,simplification_tolerance_degrees:[0.001,0.00025,0][rank],source_vertex_count:levelRecords[key].length*2,vertex_count:levelRecords[key].length*2}); }
 const index={chunk_feature_limit:256,format:'kane-condo-road-lod',levels,road_bounds:[-88,41.5,-87.7,41.9],selection:{basis:'deterministic-coordinate-length-score',coordinate_score_scale:10000000,note:'test'},source:{county,dataset_key:'roads',feature_count:3,release_content_sha256:'c'.repeat(64),release_key:'roads-release'},srs_id:4326,version:1};
 const ib=Buffer.from(canon(index)); const il=Buffer.alloc(8); il.writeBigUInt64BE(BigInt(ib.length)); const krf=Buffer.concat([Buffer.from('KCRD028\\n','ascii'),il,ib,...payloads]); const container=parseRoadContainer(krf,manifest); assert.equal(container.index.levels.length,3); assert.equal((await decodeRoadLevel(container,'orientation')).length,1); assert.equal((await decodeRoadLevel(container,'context')).length,2); const detail=await decodeRoadLevel(container,'detail'); assert.equal(detail.length,3); assert.match(roadPathData(detail),/^M /); assert.equal(roadLevelForViewBox(home,home),'orientation'); assert.equal(roadLevelForViewBox([home[0],home[1],home[2]/4,home[3]/4],home),'context'); assert.equal(roadLevelForViewBox([home[0],home[1],home[2]/16,home[3]/16],home),'detail'); const broken=Buffer.from(krf); broken[0]=0; assert.throws(()=>parseRoadContainer(broken,manifest),/magic header/);
+const fox={bounds:[-87.95,41.60,-87.92,41.63],coordinates:[[[-87.95,41.60],[-87.92,41.60],[-87.92,41.63],[-87.95,41.63],[-87.95,41.60]]],dataset_key:'water-fox-river',geometry_type:'Polygon',source_feature_id:'fox-1'};
+const creek=(id,x)=>({bounds:[x,41.58,x+0.02,41.64],coordinates:[[x,41.58],[x+0.01,41.61],[x+0.02,41.64]],dataset_key:'water-creeks',geometry_type:'LineString',source_feature_id:id});
+const waterRecords={overview:[fox],context:[fox,creek('creek-1',-87.91)],detail:[fox,creek('creek-1',-87.91),creek('creek-2',-87.87)]};
+let waterOffset=0; const waterPayloads=[]; const waterLevels=[]; for (const [rank,key] of ['overview','context','detail'].entries()) { const raw=Buffer.from(canon(waterRecords[key])); const compressed=zlib.deflateSync(raw,{level:9}); const chunk={bounds:[-88,41.5,-87.7,41.9],feature_count:waterRecords[key].length,length:compressed.length,offset:waterOffset,payload_sha256:sha(compressed),records_sha256:sha(raw),uncompressed_length:raw.length}; waterPayloads.push(compressed); waterOffset+=compressed.length; const creekCount=[0,1,2][rank]; waterLevels.push({chunks:[chunk],creek_feature_count:creekCount,creek_length_fraction:[0,0.6,1][rank],feature_count:1+creekCount,fox_river_feature_count:1,key,purpose:['major-water','regional-water-context','complete-exact-water-context'][rank],rank,simplification_tolerance_degrees:[0.001,0.00025,0][rank],source_vertex_count:5+(creekCount*3),vertex_count:5+(creekCount*3)}); }
+const waterIndex={chunk_feature_limit:256,format:'kane-condo-water-lod',levels:waterLevels,selection:{creek_basis:'deterministic-coordinate-length-score',coordinate_score_scale:10000000,fox_river_rule:'all-accepted-features-in-every-level',note:'test'},source:{county,datasets:{fox_river:{dataset_key:'water-fox-river',feature_count:1,release_content_sha256:'d'.repeat(64),release_key:'fox-release'},creeks:{dataset_key:'water-creeks',feature_count:2,release_content_sha256:'e'.repeat(64),release_key:'creek-release'}}},srs_id:4326,version:1,water_bounds:[-88,41.5,-87.7,41.9]};
+const wib=Buffer.from(canon(waterIndex)); const wil=Buffer.alloc(8); wil.writeBigUInt64BE(BigInt(wib.length)); const wkrf=Buffer.concat([Buffer.from('KCRW029\\n','ascii'),wil,wib,...waterPayloads]); const waterContainer=parseWaterContainer(wkrf,manifest); assert.equal(waterContainer.index.levels.length,3); const waterOverview=await decodeWaterLevel(waterContainer,'overview'); assert.equal(waterOverview.length,1); assert.equal(waterOverview[0].dataset_key,'water-fox-river'); const waterContext=await decodeWaterLevel(waterContainer,'context'); assert.equal(waterContext.length,2); const waterDetail=await decodeWaterLevel(waterContainer,'detail'); assert.equal(waterDetail.length,3); const waterPaths=waterPathData(waterDetail); assert.match(waterPaths.polygonPath,/ Z/); assert.match(waterPaths.linePath,/^M /); assert.equal(waterLevelForViewBox(home,home),'overview'); assert.equal(waterLevelForViewBox([home[0],home[1],home[2]/4,home[3]/4],home),'context'); assert.equal(waterLevelForViewBox([home[0],home[1],home[2]/16,home[3]/16],home),'detail'); const brokenWater=Buffer.from(wkrf); brokenWater[0]=0; assert.throws(()=>parseWaterContainer(brokenWater,manifest),/magic header/);
 """.replace("__APP_URI__", json.dumps(app_uri))
         result=subprocess.run([shutil.which("node"),"--input-type=module"],input=script,text=True,capture_output=True,check=False)
         self.assertEqual(0,result.returncode,result.stderr or result.stdout)
