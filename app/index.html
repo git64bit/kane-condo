@@ -43,7 +43,10 @@
         <title id="map-title">Kane County outline</title>
         <path id="county-outline" class="county-outline" vector-effect="non-scaling-stroke"></path>
       </svg>
-      <p id="map-caption" class="map-caption">Complete Kane County outline</p>
+      <div class="map-controls" aria-label="Map navigation controls">
+        <button id="reset-county-view" class="map-control" type="button" disabled>Reset county view</button>
+      </div>
+      <p id="map-caption" class="map-caption">Drag to pan • wheel or trackpad to zoom</p>
     </section>
   </main>
   <script type="module" src="/app.js"></script>

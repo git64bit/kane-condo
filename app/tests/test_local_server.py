@@ -105,12 +105,14 @@ class LocalServerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "loopback"):
             SERVER.build_server(self.app, self.package, "0.0.0.0", 0)
 
-    def test_permanent_shell_contains_full_county_svg_viewport(self) -> None:
+    def test_permanent_shell_contains_continuous_map_navigation(self) -> None:
         html = (ROOT / "app/index.html").read_text(encoding="utf-8")
         self.assertIn('id="map-panel"', html)
         self.assertIn('id="map-canvas"', html)
         self.assertIn('id="county-outline"', html)
+        self.assertIn('id="reset-county-view"', html)
         self.assertIn('preserveAspectRatio="xMidYMid meet"', html)
+        self.assertIn("Drag to pan", html)
         self.assertNotIn("Map rendering begins in Batch 035", html)
 
     def test_documentation_preserves_headless_orchestrator_boundary(self) -> None:
@@ -122,12 +124,33 @@ class LocalServerTests(unittest.TestCase):
         self.assertIn("must not require a desktop browser", root_readme)
         self.assertIn("acceptance on the orchestrator is headless", app_readme)
 
+    def test_navigation_handlers_have_no_data_or_network_side_effects(self) -> None:
+        source = (ROOT / "app/app.js").read_text(encoding="utf-8")
+        start_marker = "// Batch 036 navigation: pure viewport state only."
+        end_marker = "// End Batch 036 navigation."
+        self.assertIn(start_marker, source)
+        self.assertIn(end_marker, source)
+        navigation = source.split(start_marker, 1)[1].split(end_marker, 1)[0]
+        for prohibited in ("fetch(", "XMLHttpRequest", "localStorage", "sessionStorage", "indexedDB"):
+            self.assertNotIn(prohibited, navigation)
+        self.assertIn('setAttribute("viewBox"', navigation)
+
     @unittest.skipUnless(shutil.which("node"), "Node.js is not installed; browser math probe skipped")
-    def test_browser_overview_validation_fit_and_path_generation(self) -> None:
+    def test_browser_overview_and_navigation_math(self) -> None:
         app_uri = (ROOT / "app/app.js").resolve().as_uri()
         script = f"""
 import assert from 'node:assert/strict';
-import {{ validateCountyOverview, overviewViewBox, overviewPathData }} from {json.dumps(app_uri)};
+import {{
+  validateCountyOverview,
+  overviewViewBox,
+  overviewPathData,
+  viewportMetrics,
+  clientPointToWorld,
+  panViewBoxByPixels,
+  zoomViewBoxAt,
+  wheelSizeScale,
+  resetViewBox,
+}} from {json.dumps(app_uri)};
 
 const manifest = {{
   database: {{
@@ -158,15 +181,42 @@ const overview = {{
 
 const validated = validateCountyOverview(overview, manifest);
 assert.deepEqual(validated.fit.bounds, [-88.0,41.5,-87.7,41.9]);
-const viewBox = overviewViewBox(validated.fit.bounds);
-assert.equal(viewBox.length, 4);
-assert.ok(viewBox[0] < -88.0);
-assert.ok(viewBox[1] < -41.9);
-assert.ok(viewBox[2] > 0.3);
-assert.ok(viewBox[3] > 0.4);
+const home = overviewViewBox(validated.fit.bounds);
+assert.equal(home.length, 4);
+assert.ok(home[0] < -88.0);
+assert.ok(home[1] < -41.9);
+assert.ok(home[2] > 0.3);
+assert.ok(home[3] > 0.4);
 const path = overviewPathData(validated.outline.rings);
 assert.match(path, /^M -88 -41.5 /);
 assert.match(path, / Z$/);
+
+const metrics = viewportMetrics(home, 1200, 700);
+assert.ok(metrics.scale > 0);
+const centerA = clientPointToWorld(home, 1200, 700, 600, 350);
+const centerB = clientPointToWorld(home, 1800, 900, 900, 450);
+assert.ok(Math.abs(centerA[0] - centerB[0]) < 1e-12);
+assert.ok(Math.abs(centerA[1] - centerB[1]) < 1e-12);
+
+const panned = panViewBoxByPixels(home, 1200, 700, 100, -50);
+assert.equal(panned[2], home[2]);
+assert.equal(panned[3], home[3]);
+assert.ok(panned[0] < home[0]);
+assert.ok(panned[1] > home[1]);
+assert.deepEqual(home, overviewViewBox(validated.fit.bounds));
+
+const anchor = clientPointToWorld(home, 1200, 700, 400, 300);
+const zoomed = zoomViewBoxAt(home, home, anchor[0], anchor[1], 0.5);
+assert.ok(zoomed[2] < home[2]);
+assert.ok(zoomed[3] < home[3]);
+const anchorFractionBefore = [(anchor[0] - home[0]) / home[2], (anchor[1] - home[1]) / home[3]];
+const anchorFractionAfter = [(anchor[0] - zoomed[0]) / zoomed[2], (anchor[1] - zoomed[1]) / zoomed[3]];
+assert.ok(Math.abs(anchorFractionBefore[0] - anchorFractionAfter[0]) < 1e-12);
+assert.ok(Math.abs(anchorFractionBefore[1] - anchorFractionAfter[1]) < 1e-12);
+assert.ok(wheelSizeScale(-120) < 1);
+assert.ok(wheelSizeScale(120) > 1);
+assert.deepEqual(resetViewBox(home), home);
+assert.notEqual(resetViewBox(home), home);
 
 const incompatible = structuredClone(overview);
 incompatible.source.release_key = 'wrong-release';

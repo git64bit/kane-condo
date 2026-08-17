@@ -14,6 +14,10 @@ const EXPECTED_COUNTY = {
   state_code: "IL",
 };
 
+const NAVIGATION_MIN_ZOOM = 0.25;
+const NAVIGATION_MAX_ZOOM = 4096;
+const WHEEL_SENSITIVITY = 0.0015;
+
 function overviewFail(message, detail = null) {
   throw new PackageValidationError("OVERVIEW_INCOMPATIBLE", message, detail);
 }
@@ -210,6 +214,169 @@ export function overviewPathData(rings) {
   }).join(" ");
 }
 
+// Batch 036 navigation: pure viewport state only.
+function validateViewBox(viewBox) {
+  if (!Array.isArray(viewBox) || viewBox.length !== 4 || viewBox.some((value) => typeof value !== "number" || !Number.isFinite(value))) {
+    throw new TypeError("viewBox must contain four finite numbers");
+  }
+  if (!(viewBox[2] > 0) || !(viewBox[3] > 0)) {
+    throw new RangeError("viewBox width and height must be positive");
+  }
+  return viewBox;
+}
+
+export function viewportMetrics(viewBox, pixelWidth, pixelHeight) {
+  validateViewBox(viewBox);
+  if (!(pixelWidth > 0) || !(pixelHeight > 0)) {
+    throw new RangeError("viewport pixel dimensions must be positive");
+  }
+  const scale = Math.min(pixelWidth / viewBox[2], pixelHeight / viewBox[3]);
+  const renderedWidth = viewBox[2] * scale;
+  const renderedHeight = viewBox[3] * scale;
+  return {
+    scale,
+    offsetX: (pixelWidth - renderedWidth) / 2,
+    offsetY: (pixelHeight - renderedHeight) / 2,
+  };
+}
+
+export function clientPointToWorld(viewBox, pixelWidth, pixelHeight, pixelX, pixelY) {
+  const metrics = viewportMetrics(viewBox, pixelWidth, pixelHeight);
+  return [
+    viewBox[0] + ((pixelX - metrics.offsetX) / metrics.scale),
+    viewBox[1] + ((pixelY - metrics.offsetY) / metrics.scale),
+  ];
+}
+
+export function panViewBoxByPixels(viewBox, pixelWidth, pixelHeight, deltaX, deltaY) {
+  validateViewBox(viewBox);
+  const metrics = viewportMetrics(viewBox, pixelWidth, pixelHeight);
+  return [
+    viewBox[0] - (deltaX / metrics.scale),
+    viewBox[1] - (deltaY / metrics.scale),
+    viewBox[2],
+    viewBox[3],
+  ];
+}
+
+export function zoomViewBoxAt(viewBox, homeViewBox, anchorX, anchorY, requestedSizeScale) {
+  validateViewBox(viewBox);
+  validateViewBox(homeViewBox);
+  if (![anchorX, anchorY, requestedSizeScale].every((value) => typeof value === "number" && Number.isFinite(value))) {
+    throw new TypeError("zoom anchor and scale must be finite numbers");
+  }
+  if (!(requestedSizeScale > 0)) {
+    throw new RangeError("zoom scale must be positive");
+  }
+
+  const currentZoom = homeViewBox[2] / viewBox[2];
+  const requestedZoom = currentZoom / requestedSizeScale;
+  const targetZoom = Math.min(NAVIGATION_MAX_ZOOM, Math.max(NAVIGATION_MIN_ZOOM, requestedZoom));
+  const actualSizeScale = currentZoom / targetZoom;
+  const nextWidth = viewBox[2] * actualSizeScale;
+  const nextHeight = viewBox[3] * actualSizeScale;
+  return [
+    anchorX - ((anchorX - viewBox[0]) * actualSizeScale),
+    anchorY - ((anchorY - viewBox[1]) * actualSizeScale),
+    nextWidth,
+    nextHeight,
+  ];
+}
+
+export function wheelSizeScale(deltaY) {
+  if (typeof deltaY !== "number" || !Number.isFinite(deltaY)) {
+    throw new TypeError("wheel delta must be finite");
+  }
+  const boundedDelta = Math.max(-240, Math.min(240, deltaY));
+  return Math.exp(boundedDelta * WHEEL_SENSITIVITY);
+}
+
+export function resetViewBox(homeViewBox) {
+  validateViewBox(homeViewBox);
+  return [...homeViewBox];
+}
+
+function parseViewBox(text) {
+  const values = String(text).trim().split(/\s+/).map(Number);
+  return validateViewBox(values);
+}
+
+function applyViewBox(canvas, viewBox) {
+  canvas.setAttribute("viewBox", validateViewBox(viewBox).join(" "));
+}
+
+function installMapNavigation(ui, homeViewBox) {
+  const canvas = ui.mapCanvas;
+  let currentViewBox = resetViewBox(homeViewBox);
+  let drag = null;
+
+  const update = (viewBox) => {
+    currentViewBox = validateViewBox(viewBox);
+    applyViewBox(canvas, currentViewBox);
+  };
+
+  const reset = () => update(resetViewBox(homeViewBox));
+  ui.resetView.disabled = false;
+  ui.resetView.addEventListener("click", reset);
+
+  canvas.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || !event.isPrimary) {
+      return;
+    }
+    event.preventDefault();
+    drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    canvas.classList.add("is-panning");
+    canvas.setPointerCapture(event.pointerId);
+  });
+
+  canvas.addEventListener("pointermove", (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) {
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    const deltaX = event.clientX - drag.x;
+    const deltaY = event.clientY - drag.y;
+    if (deltaX !== 0 || deltaY !== 0) {
+      update(panViewBoxByPixels(currentViewBox, rect.width, rect.height, deltaX, deltaY));
+      drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    }
+  });
+
+  const finishDrag = (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) {
+      return;
+    }
+    if (canvas.hasPointerCapture(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
+    }
+    drag = null;
+    canvas.classList.remove("is-panning");
+  };
+  canvas.addEventListener("pointerup", finishDrag);
+  canvas.addEventListener("pointercancel", finishDrag);
+
+  canvas.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const [anchorX, anchorY] = clientPointToWorld(
+      currentViewBox,
+      rect.width,
+      rect.height,
+      event.clientX - rect.left,
+      event.clientY - rect.top,
+    );
+    update(zoomViewBoxAt(currentViewBox, homeViewBox, anchorX, anchorY, wheelSizeScale(event.deltaY)));
+  }, { passive: false });
+
+  return {
+    getViewBox() {
+      return [...currentViewBox];
+    },
+    reset,
+  };
+}
+// End Batch 036 navigation.
+
 async function loadConfig() {
   let response;
   try {
@@ -268,6 +435,7 @@ function getUi(doc) {
     mapCanvas: doc.querySelector("#map-canvas"),
     countyPath: doc.querySelector("#county-outline"),
     mapCaption: doc.querySelector("#map-caption"),
+    resetView: doc.querySelector("#reset-county-view"),
   };
 }
 
@@ -291,10 +459,11 @@ function showError(ui, error) {
 
 function renderCountyOverview(ui, overview) {
   const viewBox = overviewViewBox(overview.fit.bounds);
-  ui.mapCanvas.setAttribute("viewBox", viewBox.join(" "));
+  applyViewBox(ui.mapCanvas, viewBox);
   ui.mapCanvas.setAttribute("preserveAspectRatio", "xMidYMid meet");
   ui.countyPath.setAttribute("d", overviewPathData(overview.outline.rings));
-  ui.mapCaption.textContent = "Complete Kane County outline — local offline package";
+  ui.mapCaption.textContent = "Drag to pan • wheel or trackpad to zoom";
+  installMapNavigation(ui, viewBox);
   ui.mapPanel.hidden = false;
 }
 
@@ -319,7 +488,7 @@ async function start(doc = document) {
     const overview = await loadCountyOverview(config, manifest);
     renderCountyOverview(ui, overview);
 
-    setStatus(ui, "ready", "Kane County ready", "The complete county outline is fitted to the local map viewport.");
+    setStatus(ui, "ready", "Kane County ready", "Continuous local pan and zoom are available without data writes.");
     doc.documentElement.dataset.packageState = "ready";
   } catch (error) {
     showError(ui, error);

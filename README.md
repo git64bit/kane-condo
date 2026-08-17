@@ -12,7 +12,7 @@ The controlling project contracts are in [`docs/`](docs/). Implementation procee
 ## Current repository structure
 
 ```text
-app/            Local read-only browser shell and loopback runtime
+app/            Local read-only browser application and loopback development/workstation runtime
 database/
   migrations/   Ordered SQLite/GeoPackage migrations
   tools/        Controlled database, provenance, geometry, and import commands
@@ -45,14 +45,16 @@ Do not treat lack of a browser or accessible USB ports on the orchestrator as a 
 
 ## Local read-only application
 
-Batch 034 adds the first Milestone 4 browser runtime. It serves the browser application and one external Milestone 3 render package from a loopback-only local origin:
+Batch 034 added the first Milestone 4 browser runtime. It serves the browser application and one external Milestone 3 render package from a loopback-only local origin:
 
 ```bash
 bash app/kane-local.sh /path/to/render-package
 ```
 
-The browser validates the local package manifest and all required component byte lengths and SHA-256 hashes before declaring the package ready. Batch 035 adds the fitted full-county opening outline from `county-overview.json`. These batches do not contact the future private API or permit classification writes.
+The browser validates the local package manifest and all required component byte lengths and SHA-256 hashes before opening the map. Batch 035 adds the fitted full-county opening outline from `county-overview.json`. Batch 036 adds continuous browser-side pan and pointer-anchored wheel/trackpad zoom plus reset-to-county behavior. Navigation changes only transient SVG viewport state and performs no network or persistence writes.
+
+The application logic remains browser-side HTML, CSS, and JavaScript. The current Python loopback runtime is a local static-serving mechanism, not an application dependency or authoritative backend.
 
 ## Development boundary
 
-Batches 008–015 establish the GeoPackage 1.4.0 core, immutable migration identity, administrative source provenance, county boundary, roads, water, official building releases, project-owned building identities, authoritative building classifications with append-only history, and a verified clean seed-import path from the accepted donor GeoPackage. Batches 016–024 establish refresh detection, candidate harvesting, comparison, identity reconciliation, promotion, and rollback. Batches 025–033 establish the reproducible offline render package. Batches 034–035 begin the offline, read-only browser application while preserving the separation between local rendering and the future private authoritative server.
+Batches 008–015 establish the GeoPackage 1.4.0 core, immutable migration identity, administrative source provenance, county boundary, roads, water, official building releases, project-owned building identities, authoritative building classifications with append-only history, and a verified clean seed-import path from the accepted donor GeoPackage. Batches 016–024 establish refresh detection, candidate harvesting, comparison, identity reconciliation, promotion, and rollback. Batches 025–033 establish the reproducible offline render package. Batches 034–036 establish the initial offline, read-only browser application shell, county opening view, and continuous navigation while preserving the separation between local rendering and the future private authoritative server.
