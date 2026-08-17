@@ -1,6 +1,6 @@
 # Kane Condo local browser application
 
-Batch 034 established the local read-only application shell and validated package-open boundary. Batch 035 added the full-county opening view. Batch 036 added continuous browser-side pan and zoom. Batch 037 added progressive road rendering. Batch 038 added progressive water rendering. Batch 039 added progressive building rendering. Batch 040 adds only offline classification colors. It does not add visibility filters, hit testing, editing, or contact with the future private Kane Condo API.
+Batch 034 established the local read-only application shell and validated package-open boundary. Batch 035 added the full-county opening view. Batch 036 added continuous browser-side pan and zoom. Batch 037 added progressive road rendering. Batch 038 added progressive water rendering. Batch 039 added progressive building rendering. Batch 040 added offline classification colors. Batch 041 adds only transient classification visibility controls. It does not add hit testing, selection, editing, persistence, or contact with the future private Kane Condo API.
 
 ## Local-origin contract
 
@@ -14,7 +14,7 @@ The current development/workstation server binds to `127.0.0.1:8765` by default 
 
 ## Package-open behavior
 
-The browser validates the Batch 032 manifest and all five required component byte lengths and SHA-256 values before opening the map. Batch 037 extended the validator with an optional in-memory component callback. Batches 038–040 reuse that same boundary so already verified road, water, building, and classification-snapshot bytes are handed directly to browser logic rather than fetched again.
+The browser validates the Batch 032 manifest and all five required component byte lengths and SHA-256 values before opening the map. Batch 037 extended the validator with an optional in-memory component callback. Batches 038–041 reuse that same boundary so already verified road, water, building, and classification-snapshot bytes are handed directly to browser logic rather than fetched again.
 
 ## Full-county opening and navigation
 
@@ -83,11 +83,19 @@ The snapshot must match the package manifest and building KRF on accepted buildi
 
 Visible building geometry remains controlled by Batch 039 LOD selection. Within each decoded level, geometry is grouped into four SVG paths by project `building_key`: Unclassified gray, Other red, Condominium green, and Apartments yellow. A missing or unrecognized lookup value resolves only to Unclassified gray. The snapshot does not change geometry, LOD thresholds, package data, or authoritative state.
 
-Batch 040 adds no visibility controls; those belong to Batch 041.
+Batch 040 introduced no visibility controls.
+
+## Batch 041 visibility filters
+
+Four independent checkbox controls govern Unclassified, Other, Condominium, and Apartments visibility. Every class starts visible on every application launch. Toggling a control changes only the corresponding existing SVG class path; decoded geometry, `building_key`, classification lookup, package files, and server state are unchanged.
+
+Filter state exists only in browser memory. It is not written to `localStorage`, cookies, IndexedDB, configuration, package files, or an API. Resetting the county view does not reset filters, and building LOD transitions preserve the current visibility choices because filtering is independent of `context` / `neighborhood` / `editing` geometry replacement.
+
+Batch 041 also defines one browser-side `classificationIsVisible` predicate. Future Batch 051 hit testing must use the same visibility state rather than creating a second rule. Batch 041 itself does not add hit testing.
 
 ## Acceptance environment
 
-The development/processing orchestrator is not the Kane Condo user workstation. Batch 040 acceptance on the orchestrator is headless: run the repository/app tests and verify the bounded source changes. Do not require a desktop browser on the orchestrator, do not ask the user to open an orchestrator loopback URL from another machine, and do not require workstation USB access.
+The development/processing orchestrator is not the Kane Condo user workstation. Batch 041 acceptance on the orchestrator is headless: run the repository/app tests and verify the bounded source changes. Do not require a desktop browser on the orchestrator, do not ask the user to open an orchestrator loopback URL from another machine, and do not require workstation USB access.
 
 Physical browser, Windows/Ubuntu workstation, and USB-runtime acceptance is reserved for Milestone 4 Batch 042 unless an earlier batch explicitly defines a target-workstation test.
 
@@ -97,6 +105,6 @@ Physical browser, Windows/Ubuntu workstation, and USB-runtime acceptance is rese
 bash app/run-tests.sh
 ```
 
-The standard-library suite continues to verify the loopback/static-serving boundary and headless acceptance rule. When Node.js is available it also builds a disposable three-level zlib KRF in memory and exercises browser road/water/building KRF parsing, decompression, hashes, record validation, LOD thresholds, project building identity, Batch 031 classification snapshot compatibility, sparse default behavior, four-class path grouping, and existing county/navigation math. Absence of Node.js skips only that browser probe and does not add a runtime dependency.
+The standard-library suite continues to verify the loopback/static-serving boundary and headless acceptance rule. When Node.js is available it also builds a disposable three-level zlib KRF in memory and exercises browser road/water/building KRF parsing, decompression, hashes, record validation, LOD thresholds, project building identity, Batch 031 classification snapshot compatibility, sparse default behavior, four-class path grouping, transient visibility state/predicate behavior, and existing county/navigation math. Absence of Node.js skips only that browser probe and does not add a runtime dependency.
 
 Production county data is never committed.

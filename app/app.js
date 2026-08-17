@@ -1013,6 +1013,44 @@ export function buildingClassificationPathData(records, lookup) {
 }
 // End Batch 040 classification colors.
 
+// Batch 041 visibility filters: transient browser-memory state shared with future hit testing.
+export function createClassificationVisibilityState() {
+  return Object.fromEntries(CLASSIFICATION_VALUES.map((classification) => [classification, true]));
+}
+
+export function classificationIsVisible(visibility, classification) {
+  const normalized = CLASSIFICATION_VALUES.includes(classification) ? classification : "unclassified";
+  return !isPlainObject(visibility) || visibility[normalized] !== false;
+}
+
+function applyClassificationVisibility(ui, visibility) {
+  for (const classification of CLASSIFICATION_VALUES) {
+    const visible = classificationIsVisible(visibility, classification);
+    const path = ui.buildingPaths[classification];
+    const input = ui.classificationFilters[classification];
+    path.style.display = visible ? "" : "none";
+    input.checked = visible;
+  }
+}
+
+function installClassificationVisibilityControls(ui, visibility) {
+  for (const classification of CLASSIFICATION_VALUES) {
+    const input = ui.classificationFilters[classification];
+    input.checked = classificationIsVisible(visibility, classification);
+    input.disabled = false;
+    input.addEventListener("change", () => {
+      visibility[classification] = Boolean(input.checked);
+      applyClassificationVisibility(ui, visibility);
+    });
+  }
+  applyClassificationVisibility(ui, visibility);
+  return {
+    getState: () => ({ ...visibility }),
+    isVisible: (classification) => classificationIsVisible(visibility, classification),
+  };
+}
+// End Batch 041 visibility filters.
+
 function createBuildingLayerController(ui, container, homeViewBox, classificationLookup, onLevelChange = () => {}) {
   const cache = new Map();
   const pending = new Map();
@@ -1089,7 +1127,7 @@ function getUi(doc) {
   return {
     indicator: doc.querySelector("#status-indicator"), title: doc.querySelector("#status-title"), message: doc.querySelector("#status-message"),
     details: doc.querySelector("#package-details"), detailCounty: doc.querySelector("#detail-county"), detailCreated: doc.querySelector("#detail-created"), detailIdentity: doc.querySelector("#detail-identity"),
-    errorDetail: doc.querySelector("#error-detail"), mapPanel: doc.querySelector("#map-panel"), mapCanvas: doc.querySelector("#map-canvas"), countyPath: doc.querySelector("#county-outline"), waterPolygons: doc.querySelector("#water-polygons"), waterLines: doc.querySelector("#water-lines"), buildingPaths: { unclassified: doc.querySelector("#building-unclassified"), other: doc.querySelector("#building-other"), condominium: doc.querySelector("#building-condominium"), apartments: doc.querySelector("#building-apartments") }, roadPath: doc.querySelector("#road-network"), mapCaption: doc.querySelector("#map-caption"), resetView: doc.querySelector("#reset-county-view"),
+    errorDetail: doc.querySelector("#error-detail"), mapPanel: doc.querySelector("#map-panel"), mapCanvas: doc.querySelector("#map-canvas"), countyPath: doc.querySelector("#county-outline"), waterPolygons: doc.querySelector("#water-polygons"), waterLines: doc.querySelector("#water-lines"), buildingPaths: { unclassified: doc.querySelector("#building-unclassified"), other: doc.querySelector("#building-other"), condominium: doc.querySelector("#building-condominium"), apartments: doc.querySelector("#building-apartments") }, classificationFilters: { unclassified: doc.querySelector("#filter-unclassified"), other: doc.querySelector("#filter-other"), condominium: doc.querySelector("#filter-condominium"), apartments: doc.querySelector("#filter-apartments") }, roadPath: doc.querySelector("#road-network"), mapCaption: doc.querySelector("#map-caption"), resetView: doc.querySelector("#reset-county-view"),
   };
 }
 
@@ -1148,6 +1186,8 @@ async function start(doc = document) {
     const waterContainer = parseWaterContainer(waterBytes, manifest);
     const buildingContainer = parseBuildingContainer(buildingsBytes, manifest);
     const classification = await parseClassificationSnapshot(classificationBytes, manifest, buildingContainer.index);
+    const classificationVisibility = createClassificationVisibilityState();
+    installClassificationVisibilityControls(ui, classificationVisibility);
     const visibleLevels = { road: null, water: null, building: null };
     const updateCaption = () => {
       const road = visibleLevels.road ?? "loading";
@@ -1165,7 +1205,7 @@ async function start(doc = document) {
       buildings.request(viewBox).catch((error) => showError(ui, error));
     });
 
-    setStatus(ui, "ready", "Kane County ready", "Continuous navigation with progressive local road, water, and classification-colored building rendering is available without data writes.");
+    setStatus(ui, "ready", "Kane County ready", "Continuous navigation, progressive local rendering, classification colors, and transient visibility filters are available without data writes.");
     doc.documentElement.dataset.packageState = "ready";
   } catch (error) { showError(ui, error); }
 }

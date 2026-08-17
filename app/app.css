@@ -27,6 +27,11 @@ h1, h2, p { margin-top: 0; } h1 { margin-bottom: 0; font-size: 1.45rem; } h2 { m
 .building-condominium { fill: #3b8f5a; }
 .building-apartments { fill: #d6ad2f; }
 .road-network { fill: none; stroke: #667788; stroke-width: 1.25; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
+.classification-filters { position: absolute; top: 1rem; left: 1rem; display: grid; gap: 0.3rem; margin: 0; padding: 0.55rem 0.7rem 0.65rem; border: 1px solid #9fb0c0; border-radius: 0.35rem; background: rgb(255 255 255 / 94%); color: #243b53; font-size: 0.78rem; }
+.classification-filters legend { padding: 0 0.2rem; font-weight: 700; color: #52606d; }
+.classification-filters label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+.classification-filters input { margin: 0; }
+.classification-filters input:disabled + * { opacity: 0.6; }
 .map-controls { position: absolute; top: 1rem; right: 1rem; }
 .map-control { appearance: none; padding: 0.5rem 0.7rem; border: 1px solid #9fb0c0; border-radius: 0.35rem; background: rgb(255 255 255 / 94%); color: #243b53; font: inherit; font-size: 0.8rem; cursor: pointer; }
 .map-control:hover:not(:disabled) { background: #ffffff; } .map-control:focus-visible { outline: 2px solid #486581; outline-offset: 2px; } .map-control:disabled { cursor: default; opacity: 0.55; }

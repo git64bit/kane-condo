@@ -29,6 +29,13 @@
         <path id="building-apartments" class="building-footprints building-apartments" vector-effect="non-scaling-stroke" data-level=""></path>
         <path id="road-network" class="road-network" vector-effect="non-scaling-stroke" data-level=""></path>
       </svg>
+      <fieldset id="classification-filters" class="classification-filters" aria-label="Building classification visibility">
+        <legend>Building visibility</legend>
+        <label><input id="filter-unclassified" type="checkbox" checked disabled> Unclassified</label>
+        <label><input id="filter-other" type="checkbox" checked disabled> Other</label>
+        <label><input id="filter-condominium" type="checkbox" checked disabled> Condominium</label>
+        <label><input id="filter-apartments" type="checkbox" checked disabled> Apartments</label>
+      </fieldset>
       <div class="map-controls" aria-label="Map navigation controls"><button id="reset-county-view" class="map-control" type="button" disabled>Reset county view</button></div>
       <p id="map-caption" class="map-caption">Loading county road, water, and building context layers</p>
     </section>
