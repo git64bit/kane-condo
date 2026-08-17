@@ -44,6 +44,12 @@ const BUILDING_AREA_FRACTIONS = [0.35, 1, 1];
 const BUILDING_NEIGHBORHOOD_ZOOM = 8;
 const BUILDING_EDITING_ZOOM = 32;
 
+const CLASSIFICATION_FORMAT = "kane-condo-classification-snapshot";
+const CLASSIFICATION_VERSION = 1;
+const CLASSIFICATION_VALUES = ["unclassified", "other", "condominium", "apartments"];
+const EXPLICIT_CLASSIFICATIONS = ["other", "condominium", "apartments"];
+const BUILDING_KEY_PATTERN = /^kcb-[0-9a-f]{64}$/;
+
 function fail(code, message, detail = null) {
   throw new PackageValidationError(code, message, detail);
 }
@@ -62,6 +68,10 @@ function waterFail(message, detail = null) {
 
 function buildingFail(message, detail = null) {
   fail("BUILDING_INCOMPATIBLE", message, detail);
+}
+
+function classificationFail(message, detail = null) {
+  fail("CLASSIFICATION_INCOMPATIBLE", message, detail);
 }
 
 function isPlainObject(value) {
@@ -924,7 +934,86 @@ export function buildingLevelForViewBox(viewBox, homeViewBox) {
   return "context";
 }
 
-function createBuildingLayerController(ui, container, homeViewBox, onLevelChange = () => {}) {
+// Batch 040 classification colors: sparse validated snapshot joined by project building_key.
+export async function parseClassificationSnapshot(bytes, manifest, buildingIndex) {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let text;
+  let document;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(data);
+    document = JSON.parse(text);
+  } catch (error) {
+    classificationFail("Classification snapshot is not valid UTF-8 JSON.", String(error));
+  }
+  if (text !== canonicalize(document)) classificationFail("Classification snapshot is not canonical JSON.");
+  const snapshot = exactKeys(document, ["classifications", "default_classification", "explicit", "format", "identity", "source", "version"], "Classification snapshot", classificationFail);
+  if (snapshot.format !== CLASSIFICATION_FORMAT || snapshot.version !== CLASSIFICATION_VERSION) classificationFail(`Unsupported classification snapshot ${String(snapshot.format)} version ${String(snapshot.version)}.`);
+  if (!Array.isArray(snapshot.classifications) || snapshot.classifications.length !== CLASSIFICATION_VALUES.length || snapshot.classifications.some((value, index) => value !== CLASSIFICATION_VALUES[index])) classificationFail("Classification snapshot class contract is incompatible.");
+  if (snapshot.default_classification !== "unclassified") classificationFail("Classification snapshot default classification is not unclassified.");
+
+  const identity = exactKeys(snapshot.identity, ["field", "kind", "render_building_count", "render_identity_sha256"], "Classification snapshot identity", classificationFail);
+  if (identity.field !== "building_key" || identity.kind !== "kane-condo-project-building") classificationFail("Classification snapshot project identity contract is incompatible.");
+  if (!Number.isSafeInteger(identity.render_building_count) || identity.render_building_count < 1) classificationFail("Classification snapshot render building count is invalid.");
+  if (typeof identity.render_identity_sha256 !== "string" || !/^[0-9a-f]{64}$/.test(identity.render_identity_sha256)) classificationFail("Classification snapshot render identity SHA-256 is invalid.");
+
+  const source = exactKeys(snapshot.source, ["dataset_key", "feature_count", "release_content_sha256", "release_key"], "Classification snapshot source", classificationFail);
+  if (source.dataset_key !== "buildings" || !Number.isSafeInteger(source.feature_count) || source.feature_count !== identity.render_building_count) classificationFail("Classification snapshot source identity is inconsistent.");
+  if (typeof source.release_key !== "string" || source.release_key.length === 0 || typeof source.release_content_sha256 !== "string" || !/^[0-9a-f]{64}$/.test(source.release_content_sha256)) classificationFail("Classification snapshot building release identity is invalid.");
+  const accepted = manifest?.database?.accepted_releases?.buildings;
+  if (!isPlainObject(accepted) || source.release_key !== accepted.release_key || source.release_content_sha256 !== accepted.release_content_sha256 || source.feature_count !== accepted.feature_count) classificationFail("Classification snapshot building release does not match the validated package manifest.");
+  if (!isPlainObject(buildingIndex?.source) || source.release_key !== buildingIndex.source.release_key || source.release_content_sha256 !== buildingIndex.source.release_content_sha256 || source.feature_count !== buildingIndex.source.feature_count) classificationFail("Classification snapshot does not match the validated building KRF identity.");
+
+  const explicit = exactKeys(snapshot.explicit, ["count", "counts", "non_rendered_explicit_count", "records", "records_sha256"], "Classification snapshot explicit state", classificationFail);
+  if (!Number.isSafeInteger(explicit.count) || explicit.count < 0 || explicit.count > identity.render_building_count) classificationFail("Classification snapshot explicit count is invalid.");
+  if (!Number.isSafeInteger(explicit.non_rendered_explicit_count) || explicit.non_rendered_explicit_count < 0) classificationFail("Classification snapshot non-rendered explicit count is invalid.");
+  if (!Array.isArray(explicit.records) || explicit.records.length !== explicit.count) classificationFail("Classification snapshot explicit records are invalid.");
+  if (typeof explicit.records_sha256 !== "string" || !/^[0-9a-f]{64}$/.test(explicit.records_sha256)) classificationFail("Classification snapshot explicit-record SHA-256 is invalid.");
+
+  const lookup = new Map();
+  let previousKey = null;
+  const expectedCounts = { unclassified: 0, other: 0, condominium: 0, apartments: 0 };
+  for (const [index, record] of explicit.records.entries()) {
+    if (!Array.isArray(record) || record.length !== 2) classificationFail(`Classification snapshot record ${index} is not a two-item array.`);
+    const [buildingKey, classification] = record;
+    if (typeof buildingKey !== "string" || !BUILDING_KEY_PATTERN.test(buildingKey)) classificationFail(`Classification snapshot record ${index} building_key is invalid.`);
+    if (!EXPLICIT_CLASSIFICATIONS.includes(classification)) classificationFail(`Classification snapshot record ${index} classification is invalid.`);
+    if (previousKey !== null && buildingKey <= previousKey) classificationFail("Classification snapshot records are not strictly sorted by building_key.");
+    previousKey = buildingKey;
+    lookup.set(buildingKey, classification);
+    expectedCounts[classification] += 1;
+  }
+  expectedCounts.unclassified = identity.render_building_count - explicit.records.length;
+  const counts = exactKeys(explicit.counts, CLASSIFICATION_VALUES, "Classification snapshot counts", classificationFail);
+  for (const classification of CLASSIFICATION_VALUES) {
+    if (!Number.isSafeInteger(counts[classification]) || counts[classification] < 0 || counts[classification] !== expectedCounts[classification]) classificationFail(`Classification snapshot ${classification} count is inconsistent.`);
+  }
+  const computedRecordsSha = await sha256Bytes(new TextEncoder().encode(canonicalize(explicit.records)));
+  if (computedRecordsSha !== explicit.records_sha256) classificationFail("Classification snapshot explicit-record SHA-256 is invalid.");
+
+  const compatibility = manifest?.classification_compatibility;
+  if (!isPlainObject(compatibility) || compatibility.building_component !== "buildings" || compatibility.classification_component !== "classification_snapshot") classificationFail("Package classification compatibility metadata is unavailable or incompatible.");
+  if (identity.render_building_count !== compatibility.render_building_count || identity.render_identity_sha256 !== compatibility.render_identity_sha256 || explicit.count !== compatibility.explicit_count || explicit.records_sha256 !== compatibility.records_sha256 || source.release_key !== compatibility.source_release_key || source.release_content_sha256 !== compatibility.source_release_content_sha256) classificationFail("Classification snapshot does not match package classification compatibility metadata.");
+
+  return { document: snapshot, lookup };
+}
+
+export function classificationForBuildingKey(lookup, buildingKey) {
+  const value = lookup instanceof Map ? lookup.get(buildingKey) : undefined;
+  return EXPLICIT_CLASSIFICATIONS.includes(value) ? value : "unclassified";
+}
+
+export function buildingClassificationPathData(records, lookup) {
+  const paths = { unclassified: [], other: [], condominium: [], apartments: [] };
+  for (const record of records) {
+    const classification = classificationForBuildingKey(lookup, record.building_key);
+    const polygons = record.geometry_type === "Polygon" ? [record.coordinates] : record.coordinates;
+    for (const polygon of polygons) for (const ring of polygon) paths[classification].push(ringPathData(ring));
+  }
+  return Object.fromEntries(CLASSIFICATION_VALUES.map((classification) => [classification, paths[classification].join(" ")]));
+}
+// End Batch 040 classification colors.
+
+function createBuildingLayerController(ui, container, homeViewBox, classificationLookup, onLevelChange = () => {}) {
   const cache = new Map();
   const pending = new Map();
   let visibleLevel = null;
@@ -936,7 +1025,7 @@ function createBuildingLayerController(ui, container, homeViewBox, onLevelChange
     if (cache.has(levelKey)) return Promise.resolve(cache.get(levelKey));
     if (pending.has(levelKey)) return pending.get(levelKey);
     const work = decodeBuildingLevel(container, levelKey).then((records) => {
-      const decoded = { records, pathData: buildingPathData(records) };
+      const decoded = { records, paths: buildingClassificationPathData(records, classificationLookup) };
       cache.set(levelKey, decoded);
       pending.delete(levelKey);
       return decoded;
@@ -955,8 +1044,11 @@ function createBuildingLayerController(ui, container, homeViewBox, onLevelChange
     const serial = ++requestSerial;
     const decoded = await loadLevel(levelKey);
     if (serial !== requestSerial || wantedLevel !== levelKey) return;
-    ui.buildingPath.setAttribute("d", decoded.pathData);
-    ui.buildingPath.dataset.level = levelKey;
+    for (const classification of CLASSIFICATION_VALUES) {
+      const path = ui.buildingPaths[classification];
+      path.setAttribute("d", decoded.paths[classification]);
+      path.dataset.level = levelKey;
+    }
     visibleRecords = decoded.records;
     visibleLevel = levelKey;
     onLevelChange(levelKey);
@@ -997,7 +1089,7 @@ function getUi(doc) {
   return {
     indicator: doc.querySelector("#status-indicator"), title: doc.querySelector("#status-title"), message: doc.querySelector("#status-message"),
     details: doc.querySelector("#package-details"), detailCounty: doc.querySelector("#detail-county"), detailCreated: doc.querySelector("#detail-created"), detailIdentity: doc.querySelector("#detail-identity"),
-    errorDetail: doc.querySelector("#error-detail"), mapPanel: doc.querySelector("#map-panel"), mapCanvas: doc.querySelector("#map-canvas"), countyPath: doc.querySelector("#county-outline"), waterPolygons: doc.querySelector("#water-polygons"), waterLines: doc.querySelector("#water-lines"), buildingPath: doc.querySelector("#building-footprints"), roadPath: doc.querySelector("#road-network"), mapCaption: doc.querySelector("#map-caption"), resetView: doc.querySelector("#reset-county-view"),
+    errorDetail: doc.querySelector("#error-detail"), mapPanel: doc.querySelector("#map-panel"), mapCanvas: doc.querySelector("#map-canvas"), countyPath: doc.querySelector("#county-outline"), waterPolygons: doc.querySelector("#water-polygons"), waterLines: doc.querySelector("#water-lines"), buildingPaths: { unclassified: doc.querySelector("#building-unclassified"), other: doc.querySelector("#building-other"), condominium: doc.querySelector("#building-condominium"), apartments: doc.querySelector("#building-apartments") }, roadPath: doc.querySelector("#road-network"), mapCaption: doc.querySelector("#map-caption"), resetView: doc.querySelector("#reset-county-view"),
   };
 }
 
@@ -1027,17 +1119,20 @@ async function start(doc = document) {
     let roadsBytes = null;
     let waterBytes = null;
     let buildingsBytes = null;
+    let classificationBytes = null;
     const manifest = await validateLocalPackage(config, {
       onProgress(progress) { setStatus(ui, "checking", "Checking local package", progress.message); },
       onComponent(component, bytes) {
         if (component.role === "roads") roadsBytes = bytes;
         if (component.role === "water") waterBytes = bytes;
         if (component.role === "buildings") buildingsBytes = bytes;
+        if (component.role === "classification_snapshot") classificationBytes = bytes;
       },
     });
     if (!roadsBytes) fail("ROAD_INCOMPATIBLE", "Validated package did not expose its road component bytes.");
     if (!waterBytes) fail("WATER_INCOMPATIBLE", "Validated package did not expose its water component bytes.");
     if (!buildingsBytes) fail("BUILDING_INCOMPATIBLE", "Validated package did not expose its building component bytes.");
+    if (!classificationBytes) fail("CLASSIFICATION_INCOMPATIBLE", "Validated package did not expose its classification snapshot bytes.");
     const county = manifest.database.county;
     ui.detailCounty.textContent = `${county.name}, ${county.state_code}`;
     ui.detailCreated.textContent = manifest.created_at;
@@ -1048,10 +1143,11 @@ async function start(doc = document) {
     const overview = await loadCountyOverview(config, manifest);
     const homeViewBox = renderCountyOverview(ui, overview);
 
-    setStatus(ui, "checking", "Opening Kane County", "Decoding county road, water, and building context layers.");
+    setStatus(ui, "checking", "Opening Kane County", "Decoding county road, water, building, and classification layers.");
     const roadContainer = parseRoadContainer(roadsBytes, manifest);
     const waterContainer = parseWaterContainer(waterBytes, manifest);
     const buildingContainer = parseBuildingContainer(buildingsBytes, manifest);
+    const classification = await parseClassificationSnapshot(classificationBytes, manifest, buildingContainer.index);
     const visibleLevels = { road: null, water: null, building: null };
     const updateCaption = () => {
       const road = visibleLevels.road ?? "loading";
@@ -1061,7 +1157,7 @@ async function start(doc = document) {
     };
     const roads = createRoadLayerController(ui, roadContainer, homeViewBox, (level) => { visibleLevels.road = level; updateCaption(); });
     const water = createWaterLayerController(ui, waterContainer, homeViewBox, (level) => { visibleLevels.water = level; updateCaption(); });
-    const buildings = createBuildingLayerController(ui, buildingContainer, homeViewBox, (level) => { visibleLevels.building = level; updateCaption(); });
+    const buildings = createBuildingLayerController(ui, buildingContainer, homeViewBox, classification.lookup, (level) => { visibleLevels.building = level; updateCaption(); });
     await Promise.all([roads.request(homeViewBox), water.request(homeViewBox), buildings.request(homeViewBox)]);
     installMapNavigation(ui, homeViewBox, (viewBox) => {
       roads.request(viewBox).catch((error) => showError(ui, error));
@@ -1069,7 +1165,7 @@ async function start(doc = document) {
       buildings.request(viewBox).catch((error) => showError(ui, error));
     });
 
-    setStatus(ui, "ready", "Kane County ready", "Continuous navigation with progressive local road, water, and neutral building rendering is available without data writes.");
+    setStatus(ui, "ready", "Kane County ready", "Continuous navigation with progressive local road, water, and classification-colored building rendering is available without data writes.");
     doc.documentElement.dataset.packageState = "ready";
   } catch (error) { showError(ui, error); }
 }

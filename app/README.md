@@ -1,6 +1,6 @@
 # Kane Condo local browser application
 
-Batch 034 established the local read-only application shell and validated package-open boundary. Batch 035 added the full-county opening view. Batch 036 added continuous browser-side pan and zoom. Batch 037 added progressive road rendering. Batch 038 added progressive water rendering. Batch 039 adds only progressive neutral building rendering. It does not add classification colors, visibility filters, hit testing, editing, or contact with the future private Kane Condo API.
+Batch 034 established the local read-only application shell and validated package-open boundary. Batch 035 added the full-county opening view. Batch 036 added continuous browser-side pan and zoom. Batch 037 added progressive road rendering. Batch 038 added progressive water rendering. Batch 039 added progressive building rendering. Batch 040 adds only offline classification colors. It does not add visibility filters, hit testing, editing, or contact with the future private Kane Condo API.
 
 ## Local-origin contract
 
@@ -14,7 +14,7 @@ The current development/workstation server binds to `127.0.0.1:8765` by default 
 
 ## Package-open behavior
 
-The browser validates the Batch 032 manifest and all five required component byte lengths and SHA-256 values before opening the map. Batch 037 extended the validator with an optional in-memory component callback. Batches 038–039 reuse that same boundary so already verified `roads-lod.krf`, `water-lod.krf`, and `buildings-lod.krf` bytes are handed directly to their browser renderers rather than fetched again.
+The browser validates the Batch 032 manifest and all five required component byte lengths and SHA-256 values before opening the map. Batch 037 extended the validator with an optional in-memory component callback. Batches 038–040 reuse that same boundary so already verified road, water, building, and classification-snapshot bytes are handed directly to browser logic rather than fetched again.
 
 ## Full-county opening and navigation
 
@@ -71,13 +71,23 @@ The browser consumes the existing Batch 030 `buildings-lod.krf` container withou
 
 Building thresholds are deterministic browser constants based only on Batch 036 zoom ratio: below `8x` uses `context`, `8x` through less than `32x` uses `neighborhood`, and `32x` or greater uses `editing`. The visible building path is replaced only after the requested level has fully decoded, so the previous complete level remains visible and chunk/Morton boundaries remain invisible.
 
-Buildings use one neutral style in Batch 039. Decoded records retain their project-owned `building_key`; Batch 040 owns classification-driven colors. No source attribute or footprint geometry is interpreted as a classification in this batch.
+Batch 039 preserved each decoded record's project-owned `building_key`. Batch 040 uses that identity only for the validated offline classification join; no source attribute or footprint geometry is interpreted as a classification.
 
 Building chunk decompression uses the browser `DecompressionStream("deflate")` API. Python does not parse or decompress building data, and no server API is involved.
 
+## Batch 040 classification colors
+
+The browser consumes the already package-validated Batch 031 `classification-snapshot.json` bytes in memory. It requires the exact four-class contract and sparse default semantics: `unclassified` is the default, while explicit records contain only `other`, `condominium`, or `apartments` keyed by `building_key`.
+
+The snapshot must match the package manifest and building KRF on accepted building release identity and render-building count. Its `render_identity_sha256`, explicit count, and explicit-record SHA-256 must match the manifest's classification compatibility metadata. Records must be strictly sorted, unique, and use valid project building keys.
+
+Visible building geometry remains controlled by Batch 039 LOD selection. Within each decoded level, geometry is grouped into four SVG paths by project `building_key`: Unclassified gray, Other red, Condominium green, and Apartments yellow. A missing or unrecognized lookup value resolves only to Unclassified gray. The snapshot does not change geometry, LOD thresholds, package data, or authoritative state.
+
+Batch 040 adds no visibility controls; those belong to Batch 041.
+
 ## Acceptance environment
 
-The development/processing orchestrator is not the Kane Condo user workstation. Batch 039 acceptance on the orchestrator is headless: run the repository/app tests and verify the bounded source changes. Do not require a desktop browser on the orchestrator, do not ask the user to open an orchestrator loopback URL from another machine, and do not require workstation USB access.
+The development/processing orchestrator is not the Kane Condo user workstation. Batch 040 acceptance on the orchestrator is headless: run the repository/app tests and verify the bounded source changes. Do not require a desktop browser on the orchestrator, do not ask the user to open an orchestrator loopback URL from another machine, and do not require workstation USB access.
 
 Physical browser, Windows/Ubuntu workstation, and USB-runtime acceptance is reserved for Milestone 4 Batch 042 unless an earlier batch explicitly defines a target-workstation test.
 
@@ -87,6 +97,6 @@ Physical browser, Windows/Ubuntu workstation, and USB-runtime acceptance is rese
 bash app/run-tests.sh
 ```
 
-The standard-library suite continues to verify the loopback/static-serving boundary and headless acceptance rule. When Node.js is available it also builds a disposable three-level zlib KRF in memory and exercises browser road/water/building KRF parsing, decompression, hashes, record validation, LOD thresholds, exact/completeness rules, project building identity, polygon/line path generation, and existing county/navigation math. Absence of Node.js skips only that browser probe and does not add a runtime dependency.
+The standard-library suite continues to verify the loopback/static-serving boundary and headless acceptance rule. When Node.js is available it also builds a disposable three-level zlib KRF in memory and exercises browser road/water/building KRF parsing, decompression, hashes, record validation, LOD thresholds, project building identity, Batch 031 classification snapshot compatibility, sparse default behavior, four-class path grouping, and existing county/navigation math. Absence of Node.js skips only that browser probe and does not add a runtime dependency.
 
 Production county data is never committed.
