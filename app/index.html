@@ -9,44 +9,22 @@
 <body>
   <main class="shell" aria-labelledby="app-title">
     <header class="shell__header">
-      <div>
-        <p class="eyebrow">Kane County, Illinois</p>
-        <h1 id="app-title">Kane Condo</h1>
-      </div>
+      <div><p class="eyebrow">Kane County, Illinois</p><h1 id="app-title">Kane Condo</h1></div>
       <span class="mode-badge">Local read-only runtime</span>
     </header>
-
     <section class="status-panel" aria-live="polite" aria-atomic="true">
-      <div class="status-panel__row">
-        <span id="status-indicator" class="status-indicator" data-state="checking" aria-hidden="true"></span>
-        <div>
-          <h2 id="status-title">Checking local package</h2>
-          <p id="status-message">Loading local configuration.</p>
-        </div>
-      </div>
-      <dl id="package-details" class="package-details" hidden>
-        <div><dt>County</dt><dd id="detail-county">—</dd></div>
-        <div><dt>Package created</dt><dd id="detail-created">—</dd></div>
-        <div><dt>Package identity</dt><dd id="detail-identity">—</dd></div>
-      </dl>
+      <div class="status-panel__row"><span id="status-indicator" class="status-indicator" data-state="checking" aria-hidden="true"></span><div><h2 id="status-title">Checking local package</h2><p id="status-message">Loading local configuration.</p></div></div>
+      <dl id="package-details" class="package-details" hidden><div><dt>County</dt><dd id="detail-county">—</dd></div><div><dt>Package created</dt><dd id="detail-created">—</dd></div><div><dt>Package identity</dt><dd id="detail-identity">—</dd></div></dl>
       <pre id="error-detail" class="error-detail" hidden></pre>
     </section>
-
     <section id="map-panel" class="map-panel" aria-label="Kane County map" hidden>
-      <svg
-        id="map-canvas"
-        class="map-canvas"
-        role="img"
-        aria-labelledby="map-title map-caption"
-        preserveAspectRatio="xMidYMid meet"
-      >
-        <title id="map-title">Kane County outline</title>
+      <svg id="map-canvas" class="map-canvas" role="img" aria-labelledby="map-title map-caption" preserveAspectRatio="xMidYMid meet">
+        <title id="map-title">Kane County map</title>
         <path id="county-outline" class="county-outline" vector-effect="non-scaling-stroke"></path>
+        <path id="road-network" class="road-network" vector-effect="non-scaling-stroke" data-level=""></path>
       </svg>
-      <div class="map-controls" aria-label="Map navigation controls">
-        <button id="reset-county-view" class="map-control" type="button" disabled>Reset county view</button>
-      </div>
-      <p id="map-caption" class="map-caption">Drag to pan • wheel or trackpad to zoom</p>
+      <div class="map-controls" aria-label="Map navigation controls"><button id="reset-county-view" class="map-control" type="button" disabled>Reset county view</button></div>
+      <p id="map-caption" class="map-caption">Loading county road orientation layer</p>
     </section>
   </main>
   <script type="module" src="/app.js"></script>

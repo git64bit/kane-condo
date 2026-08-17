@@ -45,16 +45,10 @@ Do not treat lack of a browser or accessible USB ports on the orchestrator as a 
 
 ## Local read-only application
 
-Batch 034 added the first Milestone 4 browser runtime. It serves the browser application and one external Milestone 3 render package from a loopback-only local origin:
+Batch 034 added the local browser runtime and package validation. Batch 035 added the fitted full-county opening outline. Batch 036 added continuous browser-side pan and pointer-anchored zoom. Batch 037 adds progressive browser-side road rendering from the existing `roads-lod.krf` component: orientation at county scale, context at intermediate scale, and exact detail at close scale.
 
-```bash
-bash app/kane-local.sh /path/to/render-package
-```
-
-The browser validates the local package manifest and all required component byte lengths and SHA-256 hashes before opening the map. Batch 035 adds the fitted full-county opening outline from `county-overview.json`. Batch 036 adds continuous browser-side pan and pointer-anchored wheel/trackpad zoom plus reset-to-county behavior. Navigation changes only transient SVG viewport state and performs no network or persistence writes.
-
-The application logic remains browser-side HTML, CSS, and JavaScript. The current Python loopback runtime is a local static-serving mechanism, not an application dependency or authoritative backend.
+The application logic remains browser-side HTML, CSS, and JavaScript. The current Python loopback runtime is a local static-serving mechanism, not an application dependency or authoritative backend. Road KRF parsing, zlib decompression, validation, LOD selection, and SVG rendering occur in the browser; the host only serves static files.
 
 ## Development boundary
 
-Batches 008–015 establish the GeoPackage 1.4.0 core, immutable migration identity, administrative source provenance, county boundary, roads, water, official building releases, project-owned building identities, authoritative building classifications with append-only history, and a verified clean seed-import path from the accepted donor GeoPackage. Batches 016–024 establish refresh detection, candidate harvesting, comparison, identity reconciliation, promotion, and rollback. Batches 025–033 establish the reproducible offline render package. Batches 034–036 establish the initial offline, read-only browser application shell, county opening view, and continuous navigation while preserving the separation between local rendering and the future private authoritative server.
+Batches 008–015 establish the GeoPackage core and authoritative data model. Batches 016–024 establish refresh detection, candidate processing, reconciliation, promotion, and rollback. Batches 025–033 establish the reproducible offline render package. Batches 034–037 establish the initial offline, read-only browser application, full-county opening view, continuous navigation, and progressive road rendering while preserving the separation between local rendering and the future private authoritative server.

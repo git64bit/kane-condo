@@ -18,32 +18,45 @@ const NAVIGATION_MIN_ZOOM = 0.25;
 const NAVIGATION_MAX_ZOOM = 4096;
 const WHEEL_SENSITIVITY = 0.0015;
 
+const ROAD_MAGIC = "KCRD028\n";
+const ROAD_FORMAT = "kane-condo-road-lod";
+const ROAD_VERSION = 1;
+const ROAD_SRS_ID = 4326;
+const ROAD_LEVEL_KEYS = ["orientation", "context", "detail"];
+const ROAD_CONTEXT_ZOOM = 4;
+const ROAD_DETAIL_ZOOM = 16;
+
+function fail(code, message, detail = null) {
+  throw new PackageValidationError(code, message, detail);
+}
+
 function overviewFail(message, detail = null) {
-  throw new PackageValidationError("OVERVIEW_INCOMPATIBLE", message, detail);
+  fail("OVERVIEW_INCOMPATIBLE", message, detail);
+}
+
+function roadFail(message, detail = null) {
+  fail("ROAD_INCOMPATIBLE", message, detail);
 }
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function exactKeys(value, expected, label) {
+function exactKeys(value, expected, label, failure = overviewFail) {
   if (!isPlainObject(value)) {
-    overviewFail(`${label} is not an object.`);
+    failure(`${label} is not an object.`);
   }
   const actual = Object.keys(value).sort();
   const wanted = [...expected].sort();
   if (actual.length !== wanted.length || actual.some((key, index) => key !== wanted[index])) {
-    overviewFail(
-      `${label} fields are incompatible.`,
-      `Expected: ${wanted.join(", ")}\nFound: ${actual.join(", ")}`,
-    );
+    failure(`${label} fields are incompatible.`, `Expected: ${wanted.join(", ")}\nFound: ${actual.join(", ")}`);
   }
   return value;
 }
 
-function finiteNumber(value, label) {
+function finiteNumber(value, label, failure = overviewFail) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    overviewFail(`${label} is not a finite number.`);
+    failure(`${label} is not a finite number.`);
   }
   return value;
 }
@@ -52,163 +65,102 @@ function almostEqual(left, right, tolerance = 1e-12) {
   return Math.abs(left - right) <= tolerance * Math.max(1, Math.abs(left), Math.abs(right));
 }
 
-export function validateCountyOverview(document, manifest) {
-  const overview = exactKeys(
-    document,
-    ["county", "fit", "format", "outline", "source", "srs_id", "version"],
-    "County overview",
-  );
-  if (overview.format !== OVERVIEW_FORMAT || overview.version !== OVERVIEW_VERSION) {
-    overviewFail(
-      `Unsupported county overview ${String(overview.format)} version ${String(overview.version)}.`,
-      `Expected ${OVERVIEW_FORMAT} version ${OVERVIEW_VERSION}.`,
-    );
+function canonicalize(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalize).join(",")}]`;
   }
-  if (overview.srs_id !== OVERVIEW_SRS_ID) {
-    overviewFail(`County overview SRS ${String(overview.srs_id)} is unsupported.`);
+  if (isPlainObject(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalize(value[key])}`).join(",")}}`;
   }
+  return JSON.stringify(value);
+}
 
-  const county = exactKeys(
-    overview.county,
-    ["county_key", "fips_code", "name", "state_code"],
-    "County overview county",
-  );
-  const manifestCounty = manifest?.database?.county;
-  if (!isPlainObject(manifestCounty)) {
-    overviewFail("Validated package manifest does not expose county identity.");
+async function sha256Bytes(bytes) {
+  if (!globalThis.crypto?.subtle) {
+    fail("CRYPTO_UNAVAILABLE", "This browser does not provide Web Crypto SHA-256 support.");
   }
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", view);
+  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+export function validateCountyOverview(document, manifest) {
+  const overview = exactKeys(document, ["county", "fit", "format", "outline", "source", "srs_id", "version"], "County overview");
+  if (overview.format !== OVERVIEW_FORMAT || overview.version !== OVERVIEW_VERSION) {
+    overviewFail(`Unsupported county overview ${String(overview.format)} version ${String(overview.version)}.`, `Expected ${OVERVIEW_FORMAT} version ${OVERVIEW_VERSION}.`);
+  }
+  if (overview.srs_id !== OVERVIEW_SRS_ID) overviewFail(`County overview SRS ${String(overview.srs_id)} is unsupported.`);
+
+  const county = exactKeys(overview.county, ["county_key", "fips_code", "name", "state_code"], "County overview county");
+  const manifestCounty = manifest?.database?.county;
+  if (!isPlainObject(manifestCounty)) overviewFail("Validated package manifest does not expose county identity.");
   for (const key of Object.keys(EXPECTED_COUNTY)) {
     if (county[key] !== EXPECTED_COUNTY[key] || county[key] !== manifestCounty[key]) {
       overviewFail(`County overview ${key} does not match the validated Kane County package.`);
     }
   }
 
-  const source = exactKeys(
-    overview.source,
-    [
-      "dataset_key",
-      "geometry_sha256",
-      "geometry_type",
-      "release_content_sha256",
-      "release_key",
-      "source_feature_id",
-    ],
-    "County overview source",
-  );
-  if (source.dataset_key !== "county-boundary") {
-    overviewFail("County overview does not identify the county-boundary dataset.");
-  }
-  if (source.geometry_type !== "Polygon" && source.geometry_type !== "MultiPolygon") {
-    overviewFail(`County overview geometry type ${String(source.geometry_type)} is unsupported.`);
-  }
+  const source = exactKeys(overview.source, ["dataset_key", "geometry_sha256", "geometry_type", "release_content_sha256", "release_key", "source_feature_id"], "County overview source");
+  if (source.dataset_key !== "county-boundary") overviewFail("County overview does not identify the county-boundary dataset.");
+  if (source.geometry_type !== "Polygon" && source.geometry_type !== "MultiPolygon") overviewFail(`County overview geometry type ${String(source.geometry_type)} is unsupported.`);
   const acceptedBoundary = manifest?.database?.accepted_releases?.["county-boundary"];
-  if (
-    !isPlainObject(acceptedBoundary) ||
-    source.release_key !== acceptedBoundary.release_key ||
-    source.release_content_sha256 !== acceptedBoundary.release_content_sha256
-  ) {
+  if (!isPlainObject(acceptedBoundary) || source.release_key !== acceptedBoundary.release_key || source.release_content_sha256 !== acceptedBoundary.release_content_sha256) {
     overviewFail("County overview boundary release does not match the validated package manifest.");
   }
 
   const fit = exactKeys(overview.fit, ["bounds", "center", "height", "width"], "County overview fit");
-  if (!Array.isArray(fit.bounds) || fit.bounds.length !== 4) {
-    overviewFail("County overview fit bounds are invalid.");
-  }
+  if (!Array.isArray(fit.bounds) || fit.bounds.length !== 4) overviewFail("County overview fit bounds are invalid.");
   const [minX, minY, maxX, maxY] = fit.bounds.map((value, index) => finiteNumber(value, `County overview bound ${index}`));
-  if (!(maxX > minX) || !(maxY > minY)) {
-    overviewFail("County overview fit bounds do not describe a positive extent.");
-  }
-  if (!Array.isArray(fit.center) || fit.center.length !== 2) {
-    overviewFail("County overview fit center is invalid.");
-  }
+  if (!(maxX > minX) || !(maxY > minY)) overviewFail("County overview fit bounds do not describe a positive extent.");
+  if (!Array.isArray(fit.center) || fit.center.length !== 2) overviewFail("County overview fit center is invalid.");
   const centerX = finiteNumber(fit.center[0], "County overview center longitude");
   const centerY = finiteNumber(fit.center[1], "County overview center latitude");
   const width = finiteNumber(fit.width, "County overview fit width");
   const height = finiteNumber(fit.height, "County overview fit height");
-  if (
-    !almostEqual(width, maxX - minX) ||
-    !almostEqual(height, maxY - minY) ||
-    !almostEqual(centerX, (minX + maxX) / 2) ||
-    !almostEqual(centerY, (minY + maxY) / 2)
-  ) {
+  if (!almostEqual(width, maxX - minX) || !almostEqual(height, maxY - minY) || !almostEqual(centerX, (minX + maxX) / 2) || !almostEqual(centerY, (minY + maxY) / 2)) {
     overviewFail("County overview fit metadata is inconsistent with its exact bounds.");
   }
 
-  const outline = exactKeys(
-    overview.outline,
-    [
-      "kind",
-      "ring_count",
-      "rings",
-      "simplification_tolerance_degrees",
-      "source_interior_ring_count",
-      "source_vertex_count",
-      "vertex_count",
-    ],
-    "County overview outline",
-  );
-  if (outline.kind !== "exterior-rings" || !Array.isArray(outline.rings)) {
-    overviewFail("County overview outline is not an exterior-ring collection.");
-  }
-  if (!Number.isSafeInteger(outline.ring_count) || outline.ring_count < 1 || outline.ring_count !== outline.rings.length) {
-    overviewFail("County overview ring count is invalid.");
-  }
+  const outline = exactKeys(overview.outline, ["kind", "ring_count", "rings", "simplification_tolerance_degrees", "source_interior_ring_count", "source_vertex_count", "vertex_count"], "County overview outline");
+  if (outline.kind !== "exterior-rings" || !Array.isArray(outline.rings)) overviewFail("County overview outline is not an exterior-ring collection.");
+  if (!Number.isSafeInteger(outline.ring_count) || outline.ring_count < 1 || outline.ring_count !== outline.rings.length) overviewFail("County overview ring count is invalid.");
   for (let ringIndex = 0; ringIndex < outline.rings.length; ringIndex += 1) {
     const ring = outline.rings[ringIndex];
-    if (!Array.isArray(ring) || ring.length < 4) {
-      overviewFail(`County overview ring ${ringIndex} is too short.`);
-    }
+    if (!Array.isArray(ring) || ring.length < 4) overviewFail(`County overview ring ${ringIndex} is too short.`);
     for (let pointIndex = 0; pointIndex < ring.length; pointIndex += 1) {
       const point = ring[pointIndex];
-      if (!Array.isArray(point) || point.length !== 2) {
-        overviewFail(`County overview ring ${ringIndex} point ${pointIndex} is invalid.`);
-      }
+      if (!Array.isArray(point) || point.length !== 2) overviewFail(`County overview ring ${ringIndex} point ${pointIndex} is invalid.`);
       const x = finiteNumber(point[0], `County overview ring ${ringIndex} longitude`);
       const y = finiteNumber(point[1], `County overview ring ${ringIndex} latitude`);
-      if (x < minX - 1e-12 || x > maxX + 1e-12 || y < minY - 1e-12 || y > maxY + 1e-12) {
-        overviewFail(`County overview ring ${ringIndex} extends outside the exact source bounds.`);
-      }
+      if (x < minX - 1e-12 || x > maxX + 1e-12 || y < minY - 1e-12 || y > maxY + 1e-12) overviewFail(`County overview ring ${ringIndex} extends outside the exact source bounds.`);
     }
     const first = ring[0];
     const last = ring[ring.length - 1];
-    if (first[0] !== last[0] || first[1] !== last[1]) {
-      overviewFail(`County overview ring ${ringIndex} is not closed.`);
-    }
+    if (first[0] !== last[0] || first[1] !== last[1]) overviewFail(`County overview ring ${ringIndex} is not closed.`);
   }
-
   return overview;
 }
 
 export function overviewViewBox(bounds, paddingFraction = 0.04) {
-  if (!Array.isArray(bounds) || bounds.length !== 4) {
-    throw new TypeError("bounds must contain four numbers");
-  }
+  if (!Array.isArray(bounds) || bounds.length !== 4) throw new TypeError("bounds must contain four numbers");
   const [minX, minY, maxX, maxY] = bounds;
   const width = maxX - minX;
   const height = maxY - minY;
-  if (!(width > 0) || !(height > 0) || !(paddingFraction >= 0)) {
-    throw new RangeError("bounds and padding must describe a positive extent");
-  }
+  if (!(width > 0) || !(height > 0) || !(paddingFraction >= 0)) throw new RangeError("bounds and padding must describe a positive extent");
   const padX = width * paddingFraction;
   const padY = height * paddingFraction;
   return [minX - padX, -(maxY + padY), width + (2 * padX), height + (2 * padY)];
 }
 
-function formatCoordinate(value) {
-  return Number(value).toString();
-}
+function formatCoordinate(value) { return Number(value).toString(); }
 
 export function overviewPathData(rings) {
   return rings.map((ring) => {
     const points = ring.slice(0, -1);
-    if (points.length < 3) {
-      throw new RangeError("overview ring must contain at least three distinct vertices");
-    }
+    if (points.length < 3) throw new RangeError("overview ring must contain at least three distinct vertices");
     const [first, ...rest] = points;
     const commands = [`M ${formatCoordinate(first[0])} ${formatCoordinate(-first[1])}`];
-    for (const point of rest) {
-      commands.push(`L ${formatCoordinate(point[0])} ${formatCoordinate(-point[1])}`);
-    }
+    for (const point of rest) commands.push(`L ${formatCoordinate(point[0])} ${formatCoordinate(-point[1])}`);
     commands.push("Z");
     return commands.join(" ");
   }).join(" ");
@@ -216,123 +168,75 @@ export function overviewPathData(rings) {
 
 // Batch 036 navigation: pure viewport state only.
 function validateViewBox(viewBox) {
-  if (!Array.isArray(viewBox) || viewBox.length !== 4 || viewBox.some((value) => typeof value !== "number" || !Number.isFinite(value))) {
-    throw new TypeError("viewBox must contain four finite numbers");
-  }
-  if (!(viewBox[2] > 0) || !(viewBox[3] > 0)) {
-    throw new RangeError("viewBox width and height must be positive");
-  }
+  if (!Array.isArray(viewBox) || viewBox.length !== 4 || viewBox.some((value) => typeof value !== "number" || !Number.isFinite(value))) throw new TypeError("viewBox must contain four finite numbers");
+  if (!(viewBox[2] > 0) || !(viewBox[3] > 0)) throw new RangeError("viewBox width and height must be positive");
   return viewBox;
 }
 
 export function viewportMetrics(viewBox, pixelWidth, pixelHeight) {
   validateViewBox(viewBox);
-  if (!(pixelWidth > 0) || !(pixelHeight > 0)) {
-    throw new RangeError("viewport pixel dimensions must be positive");
-  }
+  if (!(pixelWidth > 0) || !(pixelHeight > 0)) throw new RangeError("viewport pixel dimensions must be positive");
   const scale = Math.min(pixelWidth / viewBox[2], pixelHeight / viewBox[3]);
   const renderedWidth = viewBox[2] * scale;
   const renderedHeight = viewBox[3] * scale;
-  return {
-    scale,
-    offsetX: (pixelWidth - renderedWidth) / 2,
-    offsetY: (pixelHeight - renderedHeight) / 2,
-  };
+  return { scale, offsetX: (pixelWidth - renderedWidth) / 2, offsetY: (pixelHeight - renderedHeight) / 2 };
 }
 
 export function clientPointToWorld(viewBox, pixelWidth, pixelHeight, pixelX, pixelY) {
   const metrics = viewportMetrics(viewBox, pixelWidth, pixelHeight);
-  return [
-    viewBox[0] + ((pixelX - metrics.offsetX) / metrics.scale),
-    viewBox[1] + ((pixelY - metrics.offsetY) / metrics.scale),
-  ];
+  return [viewBox[0] + ((pixelX - metrics.offsetX) / metrics.scale), viewBox[1] + ((pixelY - metrics.offsetY) / metrics.scale)];
 }
 
 export function panViewBoxByPixels(viewBox, pixelWidth, pixelHeight, deltaX, deltaY) {
-  validateViewBox(viewBox);
   const metrics = viewportMetrics(viewBox, pixelWidth, pixelHeight);
-  return [
-    viewBox[0] - (deltaX / metrics.scale),
-    viewBox[1] - (deltaY / metrics.scale),
-    viewBox[2],
-    viewBox[3],
-  ];
+  return [viewBox[0] - (deltaX / metrics.scale), viewBox[1] - (deltaY / metrics.scale), viewBox[2], viewBox[3]];
 }
 
 export function zoomViewBoxAt(viewBox, homeViewBox, anchorX, anchorY, requestedSizeScale) {
-  validateViewBox(viewBox);
-  validateViewBox(homeViewBox);
-  if (![anchorX, anchorY, requestedSizeScale].every((value) => typeof value === "number" && Number.isFinite(value))) {
-    throw new TypeError("zoom anchor and scale must be finite numbers");
-  }
-  if (!(requestedSizeScale > 0)) {
-    throw new RangeError("zoom scale must be positive");
-  }
-
+  validateViewBox(viewBox); validateViewBox(homeViewBox);
+  if (![anchorX, anchorY, requestedSizeScale].every((value) => typeof value === "number" && Number.isFinite(value))) throw new TypeError("zoom anchor and scale must be finite numbers");
+  if (!(requestedSizeScale > 0)) throw new RangeError("zoom scale must be positive");
   const currentZoom = homeViewBox[2] / viewBox[2];
   const requestedZoom = currentZoom / requestedSizeScale;
   const targetZoom = Math.min(NAVIGATION_MAX_ZOOM, Math.max(NAVIGATION_MIN_ZOOM, requestedZoom));
   const actualSizeScale = currentZoom / targetZoom;
-  const nextWidth = viewBox[2] * actualSizeScale;
-  const nextHeight = viewBox[3] * actualSizeScale;
   return [
     anchorX - ((anchorX - viewBox[0]) * actualSizeScale),
     anchorY - ((anchorY - viewBox[1]) * actualSizeScale),
-    nextWidth,
-    nextHeight,
+    viewBox[2] * actualSizeScale,
+    viewBox[3] * actualSizeScale,
   ];
 }
 
 export function wheelSizeScale(deltaY) {
-  if (typeof deltaY !== "number" || !Number.isFinite(deltaY)) {
-    throw new TypeError("wheel delta must be finite");
-  }
-  const boundedDelta = Math.max(-240, Math.min(240, deltaY));
-  return Math.exp(boundedDelta * WHEEL_SENSITIVITY);
+  if (typeof deltaY !== "number" || !Number.isFinite(deltaY)) throw new TypeError("wheel delta must be finite");
+  return Math.exp(Math.max(-240, Math.min(240, deltaY)) * WHEEL_SENSITIVITY);
 }
 
-export function resetViewBox(homeViewBox) {
-  validateViewBox(homeViewBox);
-  return [...homeViewBox];
-}
+export function resetViewBox(homeViewBox) { validateViewBox(homeViewBox); return [...homeViewBox]; }
+function applyViewBox(canvas, viewBox) { canvas.setAttribute("viewBox", validateViewBox(viewBox).join(" ")); }
 
-function parseViewBox(text) {
-  const values = String(text).trim().split(/\s+/).map(Number);
-  return validateViewBox(values);
-}
-
-function applyViewBox(canvas, viewBox) {
-  canvas.setAttribute("viewBox", validateViewBox(viewBox).join(" "));
-}
-
-function installMapNavigation(ui, homeViewBox) {
+function installMapNavigation(ui, homeViewBox, onViewChange = () => {}) {
   const canvas = ui.mapCanvas;
   let currentViewBox = resetViewBox(homeViewBox);
   let drag = null;
-
   const update = (viewBox) => {
     currentViewBox = validateViewBox(viewBox);
     applyViewBox(canvas, currentViewBox);
+    onViewChange([...currentViewBox]);
   };
-
   const reset = () => update(resetViewBox(homeViewBox));
   ui.resetView.disabled = false;
   ui.resetView.addEventListener("click", reset);
-
   canvas.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || !event.isPrimary) {
-      return;
-    }
+    if (event.button !== 0 || !event.isPrimary) return;
     event.preventDefault();
     drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
     canvas.classList.add("is-panning");
     canvas.setPointerCapture(event.pointerId);
   });
-
   canvas.addEventListener("pointermove", (event) => {
-    if (!drag || event.pointerId !== drag.pointerId) {
-      return;
-    }
+    if (!drag || event.pointerId !== drag.pointerId) return;
     const rect = canvas.getBoundingClientRect();
     const deltaX = event.clientX - drag.x;
     const deltaY = event.clientY - drag.y;
@@ -341,119 +245,268 @@ function installMapNavigation(ui, homeViewBox) {
       drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
     }
   });
-
   const finishDrag = (event) => {
-    if (!drag || event.pointerId !== drag.pointerId) {
-      return;
-    }
-    if (canvas.hasPointerCapture(event.pointerId)) {
-      canvas.releasePointerCapture(event.pointerId);
-    }
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     drag = null;
     canvas.classList.remove("is-panning");
   };
   canvas.addEventListener("pointerup", finishDrag);
   canvas.addEventListener("pointercancel", finishDrag);
-
   canvas.addEventListener("wheel", (event) => {
     event.preventDefault();
     const rect = canvas.getBoundingClientRect();
-    const [anchorX, anchorY] = clientPointToWorld(
-      currentViewBox,
-      rect.width,
-      rect.height,
-      event.clientX - rect.left,
-      event.clientY - rect.top,
-    );
+    const [anchorX, anchorY] = clientPointToWorld(currentViewBox, rect.width, rect.height, event.clientX - rect.left, event.clientY - rect.top);
     update(zoomViewBoxAt(currentViewBox, homeViewBox, anchorX, anchorY, wheelSizeScale(event.deltaY)));
   }, { passive: false });
-
-  return {
-    getViewBox() {
-      return [...currentViewBox];
-    },
-    reset,
-  };
+  return { getViewBox: () => [...currentViewBox], reset };
 }
 // End Batch 036 navigation.
 
+// Batch 037 roads: validated local KRF bytes, decoded only in browser memory.
+function readUint64BigEndian(view, offset) {
+  const high = view.getUint32(offset, false);
+  const low = view.getUint32(offset + 4, false);
+  const value = (high * 4294967296) + low;
+  if (!Number.isSafeInteger(value)) roadFail("Road KRF index length exceeds browser-safe integer range.");
+  return value;
+}
+
+function requireRoadBounds(bounds, label) {
+  if (!Array.isArray(bounds) || bounds.length !== 4) roadFail(`${label} bounds are invalid.`);
+  const values = bounds.map((value, index) => finiteNumber(value, `${label} bound ${index}`, roadFail));
+  if (values[2] < values[0] || values[3] < values[1]) roadFail(`${label} bounds are inverted.`);
+  return values;
+}
+
+function validateRoadIndex(index, manifest, payloadLength) {
+  exactKeys(index, ["chunk_feature_limit", "format", "levels", "road_bounds", "selection", "source", "srs_id", "version"], "Road KRF index", roadFail);
+  if (index.format !== ROAD_FORMAT || index.version !== ROAD_VERSION) roadFail(`Unsupported road KRF ${String(index.format)} version ${String(index.version)}.`);
+  if (index.srs_id !== ROAD_SRS_ID) roadFail(`Road KRF SRS ${String(index.srs_id)} is unsupported.`);
+  if (!Number.isSafeInteger(index.chunk_feature_limit) || index.chunk_feature_limit < 1) roadFail("Road KRF chunk feature limit is invalid.");
+  requireRoadBounds(index.road_bounds, "Road KRF");
+
+  const source = exactKeys(index.source, ["county", "dataset_key", "feature_count", "release_content_sha256", "release_key"], "Road KRF source", roadFail);
+  if (source.dataset_key !== "roads") roadFail("Road KRF source dataset is not roads.");
+  if (!Number.isSafeInteger(source.feature_count) || source.feature_count < 1) roadFail("Road KRF source feature count is invalid.");
+  const county = exactKeys(source.county, ["county_key", "fips_code", "name", "state_code"], "Road KRF county", roadFail);
+  const manifestCounty = manifest?.database?.county;
+  for (const key of Object.keys(EXPECTED_COUNTY)) {
+    if (county[key] !== EXPECTED_COUNTY[key] || county[key] !== manifestCounty?.[key]) roadFail(`Road KRF county ${key} does not match the validated package.`);
+  }
+  const acceptedRoads = manifest?.database?.accepted_releases?.roads;
+  if (!isPlainObject(acceptedRoads) || source.release_key !== acceptedRoads.release_key || source.release_content_sha256 !== acceptedRoads.release_content_sha256 || source.feature_count !== acceptedRoads.feature_count) {
+    roadFail("Road KRF release does not match the validated package manifest.");
+  }
+
+  if (!Array.isArray(index.levels) || index.levels.length !== ROAD_LEVEL_KEYS.length) roadFail("Road KRF must contain exactly three LOD levels.");
+  let expectedOffset = 0;
+  let previousCount = 0;
+  for (let levelIndex = 0; levelIndex < ROAD_LEVEL_KEYS.length; levelIndex += 1) {
+    const level = exactKeys(index.levels[levelIndex], ["chunks", "cumulative_length_fraction", "feature_count", "key", "purpose", "rank", "simplification_tolerance_degrees", "source_vertex_count", "vertex_count"], `Road KRF level ${levelIndex}`, roadFail);
+    if (level.key !== ROAD_LEVEL_KEYS[levelIndex] || level.rank !== levelIndex) roadFail("Road KRF LOD order/rank is incompatible.");
+    if (!Number.isSafeInteger(level.feature_count) || level.feature_count < 1 || level.feature_count < previousCount) roadFail(`Road KRF level ${level.key} feature count is invalid or non-monotonic.`);
+    previousCount = level.feature_count;
+    if (!Array.isArray(level.chunks) || level.chunks.length < 1) roadFail(`Road KRF level ${level.key} has no chunks.`);
+    let chunkFeatures = 0;
+    for (const chunk of level.chunks) {
+      exactKeys(chunk, ["bounds", "feature_count", "length", "offset", "payload_sha256", "records_sha256", "uncompressed_length"], `Road KRF ${level.key} chunk`, roadFail);
+      requireRoadBounds(chunk.bounds, `Road KRF ${level.key} chunk`);
+      if (![chunk.feature_count, chunk.length, chunk.offset, chunk.uncompressed_length].every(Number.isSafeInteger)) roadFail(`Road KRF ${level.key} chunk integer fields are invalid.`);
+      if (chunk.feature_count < 1 || chunk.feature_count > index.chunk_feature_limit || chunk.length < 1 || chunk.uncompressed_length < 1 || chunk.offset !== expectedOffset) roadFail(`Road KRF ${level.key} chunk framing is invalid.`);
+      if (!/^[0-9a-f]{64}$/.test(chunk.payload_sha256) || !/^[0-9a-f]{64}$/.test(chunk.records_sha256)) roadFail(`Road KRF ${level.key} chunk hashes are invalid.`);
+      expectedOffset += chunk.length;
+      chunkFeatures += chunk.feature_count;
+    }
+    if (chunkFeatures !== level.feature_count) roadFail(`Road KRF level ${level.key} chunk feature count does not match its level count.`);
+  }
+  if (index.levels[2].feature_count !== source.feature_count) roadFail("Road KRF detail level is not the complete accepted road network.");
+  if (expectedOffset !== payloadLength) roadFail("Road KRF payload length does not match the chunk inventory.");
+  return index;
+}
+
+export function parseRoadContainer(bytes, manifest) {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (data.byteLength < ROAD_MAGIC.length + 8) roadFail("Road KRF is truncated before its index.");
+  const magic = new TextDecoder("ascii", { fatal: true }).decode(data.slice(0, ROAD_MAGIC.length));
+  if (magic !== ROAD_MAGIC) roadFail("Road KRF magic header is invalid.");
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const indexLength = readUint64BigEndian(view, ROAD_MAGIC.length);
+  const indexStart = ROAD_MAGIC.length + 8;
+  const indexEnd = indexStart + indexLength;
+  if (indexEnd > data.byteLength) roadFail("Road KRF index is truncated.");
+  let indexText;
+  let index;
+  try {
+    indexText = new TextDecoder("utf-8", { fatal: true }).decode(data.slice(indexStart, indexEnd));
+    index = JSON.parse(indexText);
+  } catch (error) {
+    roadFail("Road KRF index is not valid UTF-8 JSON.", String(error));
+  }
+  if (indexText !== canonicalize(index)) roadFail("Road KRF index is not canonical JSON.");
+  const payload = data.slice(indexEnd);
+  validateRoadIndex(index, manifest, payload.byteLength);
+  return { index, payload };
+}
+
+async function inflateZlib(compressed) {
+  if (typeof DecompressionStream !== "function") fail("ROAD_DECOMPRESSION_UNAVAILABLE", "This browser does not provide deflate decompression required by the road package.");
+  try {
+    const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  } catch (error) {
+    fail("ROAD_DECOMPRESSION_FAILED", "A road KRF chunk could not be decompressed.", String(error));
+  }
+}
+
+function validateRoadRecord(record, label) {
+  exactKeys(record, ["bounds", "coordinates", "geometry_type", "source_feature_id"], label, roadFail);
+  requireRoadBounds(record.bounds, label);
+  if (typeof record.source_feature_id !== "string" || record.source_feature_id.length === 0) roadFail(`${label} source identity is invalid.`);
+  if (record.geometry_type !== "LineString" && record.geometry_type !== "MultiLineString") roadFail(`${label} geometry type is unsupported.`);
+  const lines = record.geometry_type === "LineString" ? [record.coordinates] : record.coordinates;
+  if (!Array.isArray(lines) || lines.length < 1) roadFail(`${label} contains no line coordinates.`);
+  for (const line of lines) {
+    if (!Array.isArray(line) || line.length < 2) roadFail(`${label} contains a line with fewer than two points.`);
+    for (const point of line) {
+      if (!Array.isArray(point) || point.length !== 2 || point.some((value) => typeof value !== "number" || !Number.isFinite(value))) roadFail(`${label} contains an invalid coordinate.`);
+    }
+  }
+  return record;
+}
+
+export async function decodeRoadLevel(container, levelKey) {
+  if (!ROAD_LEVEL_KEYS.includes(levelKey)) roadFail(`Unknown road LOD level ${String(levelKey)}.`);
+  const level = container.index.levels.find((candidate) => candidate.key === levelKey);
+  if (!level) roadFail(`Road KRF does not contain level ${levelKey}.`);
+  const records = [];
+  for (const [chunkIndex, chunk] of level.chunks.entries()) {
+    const compressed = container.payload.slice(chunk.offset, chunk.offset + chunk.length);
+    if (await sha256Bytes(compressed) !== chunk.payload_sha256) roadFail(`Road KRF ${levelKey} chunk ${chunkIndex} compressed hash is invalid.`);
+    const raw = await inflateZlib(compressed);
+    if (raw.byteLength !== chunk.uncompressed_length) roadFail(`Road KRF ${levelKey} chunk ${chunkIndex} decompressed length is invalid.`);
+    if (await sha256Bytes(raw) !== chunk.records_sha256) roadFail(`Road KRF ${levelKey} chunk ${chunkIndex} record hash is invalid.`);
+    let text;
+    let chunkRecords;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(raw);
+      chunkRecords = JSON.parse(text);
+    } catch (error) {
+      roadFail(`Road KRF ${levelKey} chunk ${chunkIndex} records are invalid JSON.`, String(error));
+    }
+    if (text !== canonicalize(chunkRecords)) roadFail(`Road KRF ${levelKey} chunk ${chunkIndex} records are not canonical JSON.`);
+    if (!Array.isArray(chunkRecords) || chunkRecords.length !== chunk.feature_count) roadFail(`Road KRF ${levelKey} chunk ${chunkIndex} feature count is invalid.`);
+    for (let recordIndex = 0; recordIndex < chunkRecords.length; recordIndex += 1) validateRoadRecord(chunkRecords[recordIndex], `Road ${levelKey} record ${records.length + recordIndex}`);
+    records.push(...chunkRecords);
+  }
+  if (records.length !== level.feature_count) roadFail(`Road KRF level ${levelKey} decoded feature count is invalid.`);
+  return records;
+}
+
+function linePathData(line) {
+  const [first, ...rest] = line;
+  const commands = [`M ${formatCoordinate(first[0])} ${formatCoordinate(-first[1])}`];
+  for (const point of rest) commands.push(`L ${formatCoordinate(point[0])} ${formatCoordinate(-point[1])}`);
+  return commands.join(" ");
+}
+
+export function roadPathData(records) {
+  const paths = [];
+  for (const record of records) {
+    const lines = record.geometry_type === "LineString" ? [record.coordinates] : record.coordinates;
+    for (const line of lines) paths.push(linePathData(line));
+  }
+  return paths.join(" ");
+}
+
+export function roadLevelForViewBox(viewBox, homeViewBox) {
+  validateViewBox(viewBox); validateViewBox(homeViewBox);
+  const zoom = homeViewBox[2] / viewBox[2];
+  if (zoom >= ROAD_DETAIL_ZOOM) return "detail";
+  if (zoom >= ROAD_CONTEXT_ZOOM) return "context";
+  return "orientation";
+}
+
+function createRoadLayerController(ui, container, homeViewBox) {
+  const cache = new Map();
+  const pending = new Map();
+  let visibleLevel = null;
+  let wantedLevel = null;
+  let requestSerial = 0;
+
+  const loadPath = (levelKey) => {
+    if (cache.has(levelKey)) return Promise.resolve(cache.get(levelKey));
+    if (pending.has(levelKey)) return pending.get(levelKey);
+    const work = decodeRoadLevel(container, levelKey).then((records) => {
+      const pathData = roadPathData(records);
+      cache.set(levelKey, pathData);
+      pending.delete(levelKey);
+      return pathData;
+    }, (error) => {
+      pending.delete(levelKey);
+      throw error;
+    });
+    pending.set(levelKey, work);
+    return work;
+  };
+
+  const request = async (viewBox) => {
+    const levelKey = roadLevelForViewBox(viewBox, homeViewBox);
+    wantedLevel = levelKey;
+    if (visibleLevel === levelKey) return;
+    const serial = ++requestSerial;
+    const pathData = await loadPath(levelKey);
+    if (serial !== requestSerial || wantedLevel !== levelKey) return;
+    ui.roadPath.setAttribute("d", pathData);
+    ui.roadPath.dataset.level = levelKey;
+    visibleLevel = levelKey;
+    ui.mapCaption.textContent = `Road detail: ${levelKey} • drag to pan • wheel or trackpad to zoom`;
+  };
+  return { request, getVisibleLevel: () => visibleLevel };
+}
+// End Batch 037 roads.
+
 async function loadConfig() {
   let response;
-  try {
-    response = await fetch("/config.json", { cache: "no-store" });
-  } catch (error) {
-    throw new PackageValidationError("CONFIG_UNAVAILABLE", "Local runtime configuration could not be loaded.", String(error));
+  try { response = await fetch("/config.json", { cache: "no-store" }); }
+  catch (error) { fail("CONFIG_UNAVAILABLE", "Local runtime configuration could not be loaded.", String(error)); }
+  if (!response.ok) fail("CONFIG_UNAVAILABLE", `Local runtime configuration returned HTTP ${response.status}.`);
+  try { return validateLocalConfig(await response.json()); }
+  catch (error) {
+    if (error instanceof PackageValidationError) throw error;
+    fail("CONFIG_INVALID_JSON", "Local runtime configuration is not valid JSON.", String(error));
   }
-  if (!response.ok) {
-    throw new PackageValidationError("CONFIG_UNAVAILABLE", `Local runtime configuration returned HTTP ${response.status}.`);
-  }
-  let document;
-  try {
-    document = await response.json();
-  } catch (error) {
-    throw new PackageValidationError("CONFIG_INVALID_JSON", "Local runtime configuration is not valid JSON.", String(error));
-  }
-  return validateLocalConfig(document);
 }
 
 async function loadCountyOverview(config, manifest) {
-  const overviewComponent = manifest.components.find((component) => component.role === "county_overview");
-  if (!overviewComponent) {
-    throw new PackageValidationError("OVERVIEW_INCOMPATIBLE", "Validated package has no county overview component.");
-  }
+  const component = manifest.components.find((item) => item.role === "county_overview");
+  if (!component) fail("OVERVIEW_INCOMPATIBLE", "Validated package has no county overview component.");
   const manifestUrl = new URL(config.package_manifest_url, globalThis.location.href);
-  const overviewUrl = new URL(overviewComponent.filename, manifestUrl);
+  const overviewUrl = new URL(component.filename, manifestUrl);
   let response;
-  try {
-    response = await fetch(overviewUrl, { cache: "no-store" });
-  } catch (error) {
-    throw new PackageValidationError("OVERVIEW_UNAVAILABLE", "County overview could not be loaded.", String(error));
+  try { response = await fetch(overviewUrl, { cache: "no-store" }); }
+  catch (error) { fail("OVERVIEW_UNAVAILABLE", "County overview could not be loaded.", String(error)); }
+  if (!response.ok) fail("OVERVIEW_UNAVAILABLE", `County overview returned HTTP ${response.status}.`, overviewUrl.href);
+  try { return validateCountyOverview(await response.json(), manifest); }
+  catch (error) {
+    if (error instanceof PackageValidationError) throw error;
+    fail("OVERVIEW_INVALID_JSON", "County overview is not valid JSON.", String(error));
   }
-  if (!response.ok) {
-    throw new PackageValidationError("OVERVIEW_UNAVAILABLE", `County overview returned HTTP ${response.status}.`, overviewUrl.href);
-  }
-  let document;
-  try {
-    document = await response.json();
-  } catch (error) {
-    throw new PackageValidationError("OVERVIEW_INVALID_JSON", "County overview is not valid JSON.", String(error));
-  }
-  return validateCountyOverview(document, manifest);
 }
 
 function getUi(doc) {
   return {
-    indicator: doc.querySelector("#status-indicator"),
-    title: doc.querySelector("#status-title"),
-    message: doc.querySelector("#status-message"),
-    details: doc.querySelector("#package-details"),
-    detailCounty: doc.querySelector("#detail-county"),
-    detailCreated: doc.querySelector("#detail-created"),
-    detailIdentity: doc.querySelector("#detail-identity"),
-    errorDetail: doc.querySelector("#error-detail"),
-    mapPanel: doc.querySelector("#map-panel"),
-    mapCanvas: doc.querySelector("#map-canvas"),
-    countyPath: doc.querySelector("#county-outline"),
-    mapCaption: doc.querySelector("#map-caption"),
-    resetView: doc.querySelector("#reset-county-view"),
+    indicator: doc.querySelector("#status-indicator"), title: doc.querySelector("#status-title"), message: doc.querySelector("#status-message"),
+    details: doc.querySelector("#package-details"), detailCounty: doc.querySelector("#detail-county"), detailCreated: doc.querySelector("#detail-created"), detailIdentity: doc.querySelector("#detail-identity"),
+    errorDetail: doc.querySelector("#error-detail"), mapPanel: doc.querySelector("#map-panel"), mapCanvas: doc.querySelector("#map-canvas"), countyPath: doc.querySelector("#county-outline"), roadPath: doc.querySelector("#road-network"), mapCaption: doc.querySelector("#map-caption"), resetView: doc.querySelector("#reset-county-view"),
   };
 }
 
-function setStatus(ui, state, heading, text) {
-  ui.indicator.dataset.state = state;
-  ui.title.textContent = heading;
-  ui.message.textContent = text;
-}
-
+function setStatus(ui, state, heading, text) { ui.indicator.dataset.state = state; ui.title.textContent = heading; ui.message.textContent = text; }
 function showError(ui, error) {
   const known = error instanceof PackageValidationError;
-  const code = known ? error.code : "UNEXPECTED_APPLICATION_ERROR";
-  const text = known ? error.message : "Unexpected error while opening the local map.";
-  setStatus(ui, "error", `Package unavailable: ${code}`, text);
-  ui.details.hidden = true;
-  ui.mapPanel.hidden = true;
-  ui.errorDetail.hidden = false;
-  ui.errorDetail.textContent = known && error.detail ? error.detail : String(error);
+  setStatus(ui, "error", `Package unavailable: ${known ? error.code : "UNEXPECTED_APPLICATION_ERROR"}`, known ? error.message : "Unexpected error while opening the local map.");
+  ui.details.hidden = true; ui.mapPanel.hidden = true; ui.errorDetail.hidden = false; ui.errorDetail.textContent = known && error.detail ? error.detail : String(error);
   document.documentElement.dataset.packageState = "error";
 }
 
@@ -462,9 +515,9 @@ function renderCountyOverview(ui, overview) {
   applyViewBox(ui.mapCanvas, viewBox);
   ui.mapCanvas.setAttribute("preserveAspectRatio", "xMidYMid meet");
   ui.countyPath.setAttribute("d", overviewPathData(overview.outline.rings));
-  ui.mapCaption.textContent = "Drag to pan • wheel or trackpad to zoom";
-  installMapNavigation(ui, viewBox);
+  ui.mapCaption.textContent = "Loading county road orientation layer";
   ui.mapPanel.hidden = false;
+  return viewBox;
 }
 
 async function start(doc = document) {
@@ -472,29 +525,33 @@ async function start(doc = document) {
   try {
     setStatus(ui, "checking", "Checking local package", "Loading local configuration.");
     const config = await loadConfig();
+    let roadsBytes = null;
     const manifest = await validateLocalPackage(config, {
-      onProgress(progress) {
-        setStatus(ui, "checking", "Checking local package", progress.message);
-      },
+      onProgress(progress) { setStatus(ui, "checking", "Checking local package", progress.message); },
+      onComponent(component, bytes) { if (component.role === "roads") roadsBytes = bytes; },
     });
+    if (!roadsBytes) fail("ROAD_INCOMPATIBLE", "Validated package did not expose its road component bytes.");
     const county = manifest.database.county;
     ui.detailCounty.textContent = `${county.name}, ${county.state_code}`;
     ui.detailCreated.textContent = manifest.created_at;
     ui.detailIdentity.textContent = manifest.identities.package_content_sha256;
-    ui.details.hidden = false;
-    ui.errorDetail.hidden = true;
+    ui.details.hidden = false; ui.errorDetail.hidden = true;
 
     setStatus(ui, "checking", "Opening Kane County", "Loading the validated county overview.");
     const overview = await loadCountyOverview(config, manifest);
-    renderCountyOverview(ui, overview);
+    const homeViewBox = renderCountyOverview(ui, overview);
 
-    setStatus(ui, "ready", "Kane County ready", "Continuous local pan and zoom are available without data writes.");
+    setStatus(ui, "checking", "Opening Kane County", "Decoding the county road orientation layer.");
+    const roadContainer = parseRoadContainer(roadsBytes, manifest);
+    const roads = createRoadLayerController(ui, roadContainer, homeViewBox);
+    await roads.request(homeViewBox);
+    installMapNavigation(ui, homeViewBox, (viewBox) => {
+      roads.request(viewBox).catch((error) => showError(ui, error));
+    });
+
+    setStatus(ui, "ready", "Kane County ready", "Continuous navigation and progressive local road rendering are available without data writes.");
     doc.documentElement.dataset.packageState = "ready";
-  } catch (error) {
-    showError(ui, error);
-  }
+  } catch (error) { showError(ui, error); }
 }
 
-if (typeof document !== "undefined") {
-  start();
-}
+if (typeof document !== "undefined") start();
